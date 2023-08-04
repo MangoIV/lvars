@@ -7,11 +7,11 @@ module Data.LVar.Pair (
   IPair, newPair, putFst, putSnd, getFst, getSnd
   ) where
 
-import Control.Exception                      (throw)
-import Control.LVish
-import Control.LVish.Internal
-import Data.IORef
-import Control.LVish.Internal.SchedIdempotent (getLV, newLV, putLV)
+import           Control.Exception                      (throw)
+import           Control.LVish
+import           Control.LVish.Internal
+import           Control.LVish.Internal.SchedIdempotent (getLV, newLV, putLV)
+import           Data.IORef
 
 ------------------------------------------------------------------------------
 -- IPairs implemented on top of (the idempotent implementation of) LVars:
@@ -42,14 +42,14 @@ putSnd (WrapLVar lv) !elt = WrapPar $ putLV lv putter
 getFst :: HasGet e => IPair s a b -> Par e s a
 getFst (WrapLVar lv) = WrapPar $ getLV lv globalThresh deltaThresh
   where globalThresh (r1, _) _ = readIORef r1
-        deltaThresh (Left x)   = return $ Just x
-        deltaThresh (Right _)  = return Nothing
+        deltaThresh (Left x)  = return $ Just x
+        deltaThresh (Right _) = return Nothing
 
 getSnd :: HasGet e => IPair s a b -> Par e s b
 getSnd (WrapLVar lv) = WrapPar $ getLV lv globalThresh deltaThresh
   where globalThresh (_, r2) _ = readIORef r2
-        deltaThresh (Left _)   = return Nothing
-        deltaThresh (Right x)  = return $ Just x
+        deltaThresh (Left _)  = return Nothing
+        deltaThresh (Right x) = return $ Just x
 
 -- TODO: LVarData2 instance??
 

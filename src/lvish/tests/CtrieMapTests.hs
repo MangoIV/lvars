@@ -1,8 +1,9 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds, TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
@@ -13,7 +14,7 @@ import qualified Data.LVar.CtrieMap as IM
 
 #include "CommonMapTests.hs"
 
-type TheMap k s v = IM.IMap k s v 
+type TheMap k s v = IM.IMap k s v
 
 --------------------------------------------------------------------------------
 
@@ -39,7 +40,7 @@ show02 :: String
 show02 = show$ runParThenFreeze $ do
   mp <- IM.newEmptyMap
   SM.insert "key1" (33::Int) mp
-  SM.insert "key2" (44::Int) mp  
+  SM.insert "key2" (44::Int) mp
   return mp
 
 -}

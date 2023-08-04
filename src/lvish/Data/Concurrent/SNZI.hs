@@ -15,7 +15,7 @@
 --
 -- The basic design is to have a *tree* of counters; each child node in the tree
 -- is allowed to invoke @arrive@/@depart@ on its parents.  There are two invariants:
--- 
+--
 --   * The number of @depart@s (decrements) must never outnumber the @arrive@s
 --   (increments) at any point in the tree.  This invariant is partially
 --   dependent on the client, which must ensure it for the exposed leaf
@@ -40,23 +40,23 @@
 -- protocol is *not* needed for @depart@, however.
 
 module Data.Concurrent.SNZI where
-  
-import Control.Monad
-import Data.Atomics
-import Data.Concurrent.AlignedIORef
-import Data.Concurrent.Internal.Reagent  
-import Data.IORef
-import GHC.Conc
-  
+
+import           Control.Monad
+import           Data.Atomics
+import           Data.Concurrent.AlignedIORef
+import           Data.Concurrent.Internal.Reagent
+import           Data.IORef
+import           GHC.Conc
+
 -- | An entry point for a shared SNZI value
-data SNZI = 
+data SNZI =
     Child (AlignedIORef Int) SNZI
   | Root  (AlignedIORef Int)
 
 -- | Signal the presence of a thread at a SNZI
-arrive :: SNZI -> IO ()    
+arrive :: SNZI -> IO ()
 arrive (Root cnt) = react $ atomicUpdate_ (ref cnt) (+1)
-arrive (Child cnt parent) = 
+arrive (Child cnt parent) =
   let upd 0    = Just (-1, True)
       upd (-1) = Nothing
       upd n    = Just (n+1, False)
@@ -66,14 +66,14 @@ arrive (Child cnt parent) =
       arrive parent
       writeBarrier
       writeIORef (ref cnt) 1
-  
+
 data TellParent = Yes | No | Err
-    
+
 -- | Signal the departure of a thread at a SNZI.  IMPORTANT: depart MUST NOT be
 -- called more times than arrive for a given SNZI value.
-depart :: SNZI -> IO ()  
+depart :: SNZI -> IO ()
 depart (Root cnt) = react $ atomicUpdate_ (ref cnt) (\x -> x-1)
-depart (Child cnt parent) = 
+depart (Child cnt parent) =
   let upd 0    = Just (0, Err)
       upd (-1) = Nothing
       upd 1    = Just (0,   Yes)
@@ -85,18 +85,18 @@ depart (Child cnt parent) =
       Yes -> depart parent
       Err -> do putStrLn "SNZI BUG: departs outnumber arrives"
                 error "SNZI BUG: departs outnumber arrives"
-    
+
 -- Helper function to generate a tree of SNZI values.
 makeTree :: Int -> [SNZI] -> [SNZI] -> IO [SNZI]
-makeTree n parents children = 
-  if n >= numCapabilities then return children 
-  else case parents of 
+makeTree n parents children =
+  if n >= numCapabilities then return children
+  else case parents of
     [] -> makeTree 0 children []
     (parent:parents') -> do
       c1 <- newAlignedIORef 0
       c2 <- newAlignedIORef 0
       makeTree (n+2) parents' $ Child c1 parent : Child c2 parent : children
-  
+
 -- | Create a shared SNZI values with numCapabilities number of entry points,
 -- together with a polling action that returns "true" when no threads are
 -- present.

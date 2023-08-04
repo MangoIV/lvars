@@ -6,9 +6,9 @@ module Data.LVar.NatArray.Unsafe
   ( NatArray(..), unsafePeek )
   where
 import qualified Data.Vector.Storable.Mutable as M
-import Foreign.Storable (sizeOf, Storable)
+import           Foreign.Storable             (Storable, sizeOf)
 -- import System.IO.Unsafe (unsafeDupablePerformIO)
-import           Control.LVish.Internal as LI
+import           Control.LVish.Internal       as LI
 
 ------------------------------------------------------------------------------------------
 
@@ -24,4 +24,4 @@ unsafePeek (NatArray lv) ix = do
   case peek of
     -- TODO: generalize:
     0 -> return Nothing
-    x -> return $! Just x 
+    x -> return $! Just x

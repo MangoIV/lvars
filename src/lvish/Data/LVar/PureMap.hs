@@ -51,23 +51,24 @@ module Data.LVar.PureMap
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal                 as LI
-import           Data.LVar.Generic                      as G
-import qualified Data.LVar.IVar                         as IV
-import           Data.LVar.PureMap.Unsafe
-import           Data.UtilInternal                      (traverseWithKey_)
 import           Control.LVish.Internal.SchedIdempotent (freezeLV,
                                                          freezeLVAfter, getLV,
                                                          newLV, putLV, putLV_)
 import qualified Control.LVish.Internal.SchedIdempotent as L
+import           Data.LVar.Generic                      as G
+import qualified Data.LVar.IVar                         as IV
+import           Data.LVar.PureMap.Unsafe
+import           Data.UtilInternal                      (traverseWithKey_)
 
-import           Control.Exception     (throw)
+import           Control.Exception                      (throw)
 import           Data.IORef
-import qualified Data.Map.Strict       as M
-import           System.IO.Unsafe      (unsafePerformIO)
-import           System.Mem.StableName (hashStableName, makeStableName)
+import qualified Data.Map.Strict                        as M
+import           System.IO.Unsafe                       (unsafePerformIO)
+import           System.Mem.StableName                  (hashStableName,
+                                                         makeStableName)
 
 -- From here we get a Generator and, in the future, ParFoldable instance for Map:
-import Data.Par.Map ()
+import           Data.Par.Map                           ()
 
 --------------------------------------------------------------------------------
 

@@ -1,16 +1,17 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE ConstraintKinds, TypeFamilies #-}
+{-# LANGUAGE BangPatterns    #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 -- | Not exported directly.  Reexported by "Control.LVish".
 module Control.LVish.Internal.Logical (asyncAnd, asyncOr, andMap, orMap) where
 
-import Control.Par.EffectSigs
-import Control.LVish.Internal.Basics
-import Control.LVish.Internal (Par(WrapPar))
-import Control.LVish.Internal.SchedIdempotent (liftIO)
-import Data.LVar.IVar    as IV
+import           Control.LVish.Internal                 (Par (WrapPar))
+import           Control.LVish.Internal.Basics
+import           Control.LVish.Internal.SchedIdempotent (liftIO)
+import           Control.Par.EffectSigs
+import           Data.LVar.IVar                         as IV
 
-import qualified Data.Atomics.Counter as C
+import qualified Data.Atomics.Counter                   as C
 
 --------------------------------------------------------------------------------
 
@@ -72,18 +73,18 @@ asyncOr hp leftM rightM kont = do
 --------------------------------------------------------------------------------
 
 {-# INLINE andMap #-}
-andMap :: (HasGet e, HasPut e) => Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool       
+andMap :: (HasGet e, HasPut e) => Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool
 andMap = makeMapper asyncAnd
 
 {-# INLINE orMap #-}
-orMap :: (HasGet e, HasPut e) => Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool       
+orMap :: (HasGet e, HasPut e) => Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool
 orMap = makeMapper asyncOr
 
 {-# INLINE makeMapper #-}
-makeMapper :: (HasGet e, HasPut e) => 
+makeMapper :: (HasGet e, HasPut e) =>
               (Maybe HandlerPool -> (Par e s Bool) -> (Par e s Bool) -> (Bool -> Par e s ()) -> Par e s ()) ->
-              Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool       
-makeMapper asyncOp hp fn ls = aloop ls 
+              Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool
+makeMapper asyncOp hp fn ls = aloop ls
   where
    aloop []  = return True
    aloop [x] = fn x

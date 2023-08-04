@@ -1,35 +1,36 @@
 
+{-# LANGUAGE DataKinds       #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeFamilies  #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 -- | Tests for the generic Par-programming interfaces.
 
 module GenericTests (tests, runTests) where
 
-import Control.Monad
-import Data.Maybe (fromMaybe)
-import Data.Word
-import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (internalLiftIO)
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Tasty.TH (testGroupGenerator)
-import Test.Tasty    (defaultMain, TestTree)
-import Test.Tasty.HUnit (testCase) -- For macro-expansion.
+import           Control.Monad
+import qualified Control.Par.Class        as PC
+import           Control.Par.Class.Unsafe (internalLiftIO)
+import           Data.Maybe               (fromMaybe)
+import           Data.Word
+import           Test.HUnit               (Assertion, Counts (..), assertBool,
+                                           assertEqual)
+import           Test.Tasty               (TestTree, defaultMain)
+import           Test.Tasty.HUnit         (testCase)
+import           Test.Tasty.TH            (testGroupGenerator)
 
-import TestHelpers as T
-import Control.LVish -- LVarSched instances...
-import Data.LVar.IVar as IV
-import qualified Data.LVar.SLMap as SM
-import qualified Control.Par.Class as PC
-import Data.Par.Range (zrange)
-import Data.Par.Splittable (pforEach)
+import           Control.LVish
+import qualified Control.Par.Class        as PC
+import           Data.LVar.IVar           as IV
+import qualified Data.LVar.SLMap          as SM
+import           Data.Par.Range           (zrange)
+import           Data.Par.Splittable      (pforEach)
+import           TestHelpers              as T
 
 --------------------------------------------------------------------------------
 
 
-case_toQPar :: Assertion  
-case_toQPar = t1 >>= assertEqual "" "hi" 
+case_toQPar :: Assertion
+case_toQPar = t1 >>= assertEqual "" "hi"
 
 t1 :: IO String
 t1 = runParQuasiDet $ isQD par
@@ -37,7 +38,7 @@ t1 = runParQuasiDet $ isQD par
 --  par :: QuasiDeterministic e => Par e s String
   par = do
     iv <- IV.new
-    -- PC.toQPar $ 
+    -- PC.toQPar $
     IV.put iv "hi"
     IV.get iv
 
@@ -51,11 +52,11 @@ expectedSum = (s * (s + 1)) `quot` 2
   where s = fromIntegral size
 
 -- ParFold instance
-case_pfold_imap :: Assertion 
+case_pfold_imap :: Assertion
 case_pfold_imap = assertNoTimeOut 3.0 $ runParNonDet $ isND $ do
   mp <- SM.newEmptyMap
   -- pforEach (zrange sz) $ \ ix -> do
-  forM_ [1..size] $ \ ix -> do       
+  forM_ [1..size] $ \ ix -> do
     SM.insert ix (fromIntegral ix::Word64) mp
 
   logDbgLn 1 $ "IMap filled up... freezing"
@@ -66,7 +67,7 @@ case_pfold_imap = assertNoTimeOut 3.0 $ runParNonDet $ isND $ do
         return x
       folder x y = do
         logDbgLn 2 $ "Summing in parallel "++show (x,y)
-        return $! x+y 
+        return $! x+y
   summed <- PC.pmapFold mapper folder 0 fmp
   logDbgLn 1 $ "Sum of IMap values: " ++ show summed
   internalLiftIO$ assertEqual "Sum of IMap values" expectedSum summed

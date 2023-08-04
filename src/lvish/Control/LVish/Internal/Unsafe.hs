@@ -7,9 +7,9 @@
 
 module Control.LVish.Internal.Unsafe() where
 
-import Control.LVish.Internal
-import Control.Monad.IO.Class
+import           Control.LVish.Internal
 import qualified Control.LVish.Internal.SchedIdempotent as L
+import           Control.Monad.IO.Class
 
 instance MonadIO (Par e s) where
-  liftIO = WrapPar . L.liftIO   
+  liftIO = WrapPar . L.liftIO

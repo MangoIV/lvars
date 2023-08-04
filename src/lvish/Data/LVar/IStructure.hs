@@ -1,48 +1,49 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE Trustworthy           #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 -- | An I-Structure, also known as an array of IVars, implemented using a boxed vector.
 
 module Data.LVar.IStructure
        (
          IStructure,
-         
-         -- * Basic operations         
+
+         -- * Basic operations
          newIStructure, newIStructureWithCallback,
          put, put_, get, getLength,
 
          -- * Iteration and callbacks
-         forEachHP, 
+         forEachHP,
 
          -- * Freezing
          freezeIStructure
-         -- forEach,         
+         -- forEach,
        ) where
 
-import Data.Vector as V
+import           Data.Vector                            as V
 
-import           Control.DeepSeq (NFData)
-import qualified Data.LVar.IVar as IV
-import qualified Data.Foldable as F
-import           Data.List (intersperse)
+import           Control.DeepSeq                        (NFData)
+import qualified Data.Foldable                          as F
+import           Data.List                              (intersperse)
+import qualified Data.LVar.IVar                         as IV
 -- import qualified Data.Traversable as T
 
-import           Control.LVish as LV hiding (put,put_,get)
+import           Control.LVish                          as LV hiding (get, put,
+                                                               put_)
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.Internal as LI
+import           Control.LVish.Internal                 as LI
 import           Control.LVish.Internal.SchedIdempotent (freezeLV)
-import           Data.LVar.Generic as G
-import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
+import           Data.LVar.Generic                      as G
+import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
 
 ------------------------------------------------------------------------------
 
@@ -60,12 +61,12 @@ instance Eq (IStructure s v) where
 instance LVarData1 IStructure where
   freeze orig@(IStructure vec) = WrapPar$ do
     -- No new alloc here, just time:
-    V.forM_ vec $ \ (IVar (WrapLVar lv)) -> freezeLV lv 
+    V.forM_ vec $ \ (IVar (WrapLVar lv)) -> freezeLV lv
     return (unsafeCoerceLVar orig)
 
-  -- | We can do better than the default here; this is /O(1)/:    
+  -- | We can do better than the default here; this is /O(1)/:
   sortFrzn = AFoldable
-                     
+
   -- Unlike the IStructure-specific forEach, this takes only values, not indices.
   addHandler mh is fn = forEachHP mh is (\ _k v -> fn v)
 
@@ -73,14 +74,14 @@ instance LVarData1 IStructure where
 -- support a freeze operation which immediately yields a `Foldable` container
 -- without any sorting (see `snapFreeze`).
 instance OrderedLVarData1 IStructure where
-  -- No extra work here...  
+  -- No extra work here...
   snapFreeze is = unsafeCoerceLVar <$> G.freeze is
 
 -- As with all LVars, after freezing, map elements can be consumed. In
 -- the case of this @IStructure@ implementation, it need only be
 -- `Frzn`, not `Trvrsbl`.
 instance F.Foldable (IStructure Frzn) where
-  foldr fn zer (IStructure vec) = 
+  foldr fn zer (IStructure vec) =
     F.foldr (\ iv acc ->
               case IV.fromIVar iv of
                 Nothing -> acc
@@ -118,7 +119,7 @@ getLength (IStructure vec) = return $! V.length vec
 
 -- Physical identity, just as with IORefs.
 -- instance Eq (IStructure s v) where
---   IStructure lv1 == IStructure lv2 = state lv1 == state lv2 
+--   IStructure lv1 == IStructure lv2 = state lv1 == state lv2
 
 -- | Create a new, empty, monotonically growing 'IStructure' of a given size.
 --   All entries start off as zero, which must be \"bottom\".
@@ -131,7 +132,7 @@ newIStructure len = fmap IStructure $
 newIStructureWithCallback :: Int -> (Int -> elt -> Par e s ()) -> Par e s (IStructure s elt)
 newIStructureWithCallback len fn =
   fmap IStructure $
-   V.generateM len $ \ix -> do 
+   V.generateM len $ \ix -> do
       iv <- IV.new
       IV.whenFull Nothing iv (fn ix)
       return iv
@@ -160,7 +161,7 @@ forEachHP hp (IStructure vec) callb =
 -- | Simple for-each loops over vector elements.
 forVec :: Storable a =>
           M.IOVector a -> (Int -> a -> Par e s ()) -> Par e s ()
-forVec vec fn = loop 0 
+forVec vec fn = loop 0
   where
     len = M.length vec
     loop i | i == len = return ()

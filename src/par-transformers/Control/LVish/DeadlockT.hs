@@ -1,7 +1,13 @@
-{-# LANGUAGE Unsafe #-}
-{-# LANGUAGE CPP, DataKinds, GeneralizedNewtypeDeriving, InstanceSigs,
-             MultiParamTypeClasses, NamedFieldPuns, ScopedTypeVariables,
-             TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs               #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE Unsafe                     #-}
 
 -- | A module for adding the deadlock-detection capability.
 module Control.LVish.DeadlockT
@@ -21,14 +27,14 @@ module Control.LVish.DeadlockT
        )-}
        where
 
-import Control.Monad.State as S
-import Data.IORef
+import           Control.Monad.State      as S
+import           Data.IORef
 
-import Control.Par.Class as PC
-import Control.Par.Class.Unsafe as PC
-import Control.Par.EffectSigs
+import           Control.Par.Class        as PC
+import           Control.Par.Class.Unsafe as PC
+import           Control.Par.EffectSigs
 
-import qualified Data.Atomics.Counter as C
+import qualified Data.Atomics.Counter     as C
 
 --------------------------------------------------------------------------------
 
@@ -66,14 +72,14 @@ instance ParMonad p => ParMonad (DeadlockT p) where
   internalLiftIO io = DeadlockT $ S.lift (internalLiftIO io)
   pbind (DeadlockT pa) f = DeadlockT $ pa >>=
                            (\x -> let DeadlockT pb = f x
-                                  in pb)                                        
+                                  in pb)
   preturn x = DeadlockT $ return x
 
   -- Every fork increments the number of live tasks by one:
   fork (DeadlockT task) = DeadlockT $ do
     s0 <- S.get
     S.lift $ internalLiftIO$ C.incrCounter 1 s0
-    let task' = do x <- task 
+    let task' = do x <- task
                    S.lift$ internalLiftIO (C.incrCounter (-1) s0)
                    return x
     S.lift $ PC.fork $ do
@@ -106,19 +112,19 @@ instance (ParMonad m, ParIVar m, LVarSched m) => LVarSched (DeadlockT m) where
      --    * if globalThresh returns Nothing, then dThresh is called AT LEAST once
      --    * get only returns when dThresh returns Just
      --    * dzThresh is never called again after it returns Just.
-     
+
      -- TODO: figure out where to mess with the counter here:
      gThresh' st frzn = do x <- globThresh st frzn
                            case x of
-                            Just a -> return x 
+                            Just a  -> return x
                             Nothing -> error "FINISHME" -- Decr counter?
      dThresh' delt = do x <- deltThresh delt
                         case x of
-                         Just a -> error "FINISHM" -- INCR here, assume this happens ONCE
+                         Just a  -> error "FINISHM" -- INCR here, assume this happens ONCE
                          Nothing -> return Nothing
 
   returnToSched = liftDT returnToSched
-{-  
+{-
 instance (ParQuasi m qm) => ParQuasi (DeadlockT m) (DeadlockT qm) where
   toQPar :: (DeadlockT m) a -> (DeadlockT qm) a
   toQPar (DeadlockT (S.StateT{runStateT})) =

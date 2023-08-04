@@ -59,10 +59,10 @@ module Control.Par.ST
 import           Control.Applicative
 #endif
 
+import qualified Control.Monad.Reader         as R
 import           Control.Monad.ST             (ST)
 import           Control.Monad.ST.Unsafe      (unsafeSTToIO)
-import qualified Control.Monad.State.Strict as S
-import qualified Control.Monad.Reader         as R
+import qualified Control.Monad.State.Strict   as S
 
 import qualified Data.Vector.Mutable          as MV
 import qualified Data.Vector.Storable.Mutable as MS

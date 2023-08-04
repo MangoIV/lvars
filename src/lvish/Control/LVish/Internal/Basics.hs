@@ -39,15 +39,16 @@ module Control.LVish.Internal.Basics
 
 import           Control.Exception                      (SomeException)
 import           Control.LVish.Internal                 as I
+import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Control.LVish.Internal.Types
 import           Control.Monad                          (forM_)
 import           Control.Par.EffectSigs
-import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Prelude                                hiding (rem)
-import qualified System.Log.TSLogger as Lg
+import qualified System.Log.TSLogger                    as Lg
 
-import qualified Control.Par.Class     as PC
-import qualified Data.Splittable.Class as SC
+import qualified Control.LVish.Internal.SchedUtils      as Sch
+import qualified Control.Par.Class                      as PC
+import qualified Data.Splittable.Class                  as SC
 
 {-# DEPRECATED parForL, parForSimple, parForTree, parForTiled
     "These will be removed in a future release in favor of a more general approach to loops."  #-}
@@ -154,9 +155,9 @@ runParLogged (WrapPar p) = L.runParLogged p
 --   This version of runPar catches ALL exceptions that occur within the runPar, and
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
---   
-runParDetailed :: Lg.DbgCfg        -- ^ Debugging configuration
-               -> Int           -- ^ How many worker threads to use. 
+--
+runParDetailed :: Sch.DbgCfg        -- ^ Debugging configuration
+               -> Int           -- ^ How many worker threads to use.
                -> (forall s . Par e s a) -- ^ The computation to run.
                -> IO ([String], Either SomeException a)
 runParDetailed dc nw (WrapPar p) = L.runParDetailed dc nw p
@@ -193,7 +194,7 @@ logDbgLn :: Int -> String -> Par e s ()
 #ifdef DEBUG_LVAR
 logDbgLn n s = WrapPar $ L.logStrLn n s
 #else
-logDbgLn _ _  = return ()
+logDbgLn _ _ = return ()
 {-# INLINE logDbgLn #-}
 #endif
 

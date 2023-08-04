@@ -13,9 +13,10 @@ module Control.LVish.DeepFrz.Internal
        )
        where
 
-import Data.Int
-import Data.Word
-import GHC.Prim  (unsafeCoerce#)
+import           Data.Int
+import           Data.Kind (Type)
+import           Data.Word
+import           GHC.Exts  (unsafeCoerce#)
 
 -- | DeepFreezing is a type-level (guaranteed /O(1)/ time complexity)
 -- operation.  It marks an LVar and its contents (recursively) as
@@ -27,7 +28,7 @@ import GHC.Prim  (unsafeCoerce#)
 class DeepFrz a where
   -- | This type function is public.  It maps pre-frozen types to
   -- frozen ones.  It should be idempotent.
-  type FrzType a :: *
+  type FrzType a :: Type
 
   -- | Private: not exported to the end user.
   frz :: a -> FrzType a
@@ -35,7 +36,7 @@ class DeepFrz a where
   -- | While `frz` is not exported, users may opt-in to the `DeepFrz`
   -- class for their datatypes and take advantage of the default instance.
   -- Doing so REQUIRES that `type FrzType a = a`.
-  default frz :: a -> a
+  default frz :: (FrzType a ~ a) => a -> FrzType a
   frz a = a
 
 -- | An uninhabited type that signals that an LVar has been frozen.

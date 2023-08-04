@@ -110,19 +110,21 @@ module Control.LVish
 
      -- * Debug facilities and internal bits
      logDbgLn, dbgChatterOnly, getLogger, runParLogged, runParDetailed,
-     OutDest(..), DbgCfg (..), defaultMemDbgRange,
+     OutDest(..), Sch.DbgCfg (..),
      LVar()
    ) where
 
 -- NOTE : This is an aggregation module:
-import           Control.LVish.Internal.Basics          as B
 import           Control.LVish.Internal                 as I
+import           Control.LVish.Internal.Basics          as B
 import           Control.LVish.Internal.Logical
+import qualified Control.LVish.Internal.SchedUtils      as Sch
 -- import           Control.LVish.Internal.Types
-import           Control.Par.EffectSigs
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import           Data.LVar.IVar 
-import           System.Log.TSLogger (LogMsg(..), OutDest(..), DbgCfg(..), defaultMemDbgRange, logOn)
+import           Control.Par.EffectSigs
+import           Data.LVar.IVar
+import           System.Log.TSLogger                    (LogMsg (..),
+                                                         OutDest (..), logOn)
 
 --------------------------------------------------------------------------------
 

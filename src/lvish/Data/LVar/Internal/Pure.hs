@@ -1,7 +1,12 @@
-{-# LANGUAGE Unsafe #-}
-{-# LANGUAGE DataKinds, BangPatterns #-}
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
-{-# LANGUAGE InstanceSigs, MagicHash #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE MagicHash             #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeSynonymInstances  #-}
+{-# LANGUAGE Unsafe                #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 {-|
@@ -23,22 +28,31 @@ module Data.LVar.Internal.Pure
        ( PureLVar(..),
          newPureLVar, putPureLVar,
 
-         waitPureLVar, freezePureLVar, fromPureLVar, 
+         waitPureLVar, freezePureLVar, fromPureLVar,
          getPureLVar, unsafeGetPureLVar, unsafeMonotonicHandlerHP,
 
          -- * Verifying lattice structure
          verifyFiniteJoin, verifyFiniteGet
        ) where
 
-import Control.LVish
-import Control.LVish.DeepFrz.Internal
-import Control.LVish.Internal
-import Data.IORef
+import           Control.LVish                          (HandlerPool, HasFreeze,
+                                                         HasGet, HasPut, LVar,
+                                                         Par)
+import           Control.LVish.DeepFrz.Internal         (DeepFrz (..), Frzn)
+import           Control.LVish.Internal                 (LVar (WrapLVar),
+                                                         Par (WrapPar), state,
+                                                         unWrapPar)
+import           Data.IORef                             (IORef,
+                                                         atomicModifyIORef',
+                                                         newIORef, readIORef)
 -- import qualified Data.Set as S
+import           Algebra.Lattice                        (BoundedJoinSemiLattice,
+                                                         Lattice ((\/)),
+                                                         joinLeq)
 import qualified Control.LVish.Internal.SchedIdempotent as LI
-import Algebra.Lattice
-import GHC.Prim (unsafeCoerce#)
-import System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
+import           GHC.Exts                               (unsafeCoerce#)
+import           System.IO.Unsafe                       (unsafeDupablePerformIO,
+                                                         unsafePerformIO)
 --------------------------------------------------------------------------------
 
 -- | An LVar which consists merely of an immutable, pure value inside a mutable box.
@@ -64,7 +78,7 @@ verifyFiniteJoin allStates join =
     (hd : _ , _, _) -> Just $ "commutativity violated!: " ++ show hd
     (_ , hd : _, _) -> Just $ "associativity violated!: " ++ show hd
     (_ , _, hd : _) -> Just $ "idempotency violated!: " ++ show hd
-    ([], [], []) -> Nothing
+    ([], [], [])    -> Nothing
   where
     isCommutative = [(a, b) | a <- allStates, b <- allStates, a `join` b /= b `join` a]
     isAssociative = [(a, b, c) |
@@ -76,7 +90,7 @@ verifyFiniteJoin allStates join =
 
 -- | Verify that a blocking get is monotone in just the right way.
 --   This takes a designated bottom and top element.
-verifyFiniteGet :: (Eq a, Show a, JoinSemiLattice a,
+verifyFiniteGet :: (Eq a, Show a, BoundedJoinSemiLattice a,
                     Eq b, Show b) =>
                    [a] -> (b,b) -> (a -> b) -> Maybe String
 verifyFiniteGet allStates (bot,top) getter =
@@ -102,14 +116,14 @@ verifyFiniteGet allStates (bot,top) getter =
 
 
 -- | A new pure LVar populated with the provided initial state.
-newPureLVar :: JoinSemiLattice t =>
+newPureLVar :: BoundedJoinSemiLattice t =>
                t -> Par e s (PureLVar s t)
 newPureLVar st = WrapPar$ fmap (PureLVar . WrapLVar) $
                  LI.newLV $ newIORef st
 
 -- | Blocks until the contents of `lv` are at or above one element of
 -- `thrshSet`, then returns that one element.
-getPureLVar :: (JoinSemiLattice t, Eq t, HasGet e) => PureLVar s t -> [t] -> Par e s t
+getPureLVar :: (BoundedJoinSemiLattice t, Eq t, HasGet e) => PureLVar s t -> [t] -> Par e s t
 getPureLVar (PureLVar (WrapLVar lv)) thrshSet =
   WrapPar$ LI.getLV lv globalThresh deltaThresh
   where globalThresh ref _ = do
@@ -121,7 +135,7 @@ getPureLVar (PureLVar (WrapLVar lv)) thrshSet =
 
 -- | Returns the element of thrshSet that `currentState` is above, if
 -- it exists.  (Assumes that there is only one such element!)
-checkThresholds :: (JoinSemiLattice t, Eq t) => t -> [t] -> Maybe t
+checkThresholds :: (BoundedJoinSemiLattice t, Eq t) => t -> [t] -> Maybe t
 -- ARGH: This is inefficient IF the state is IN the threshold set.  In that case a
 -- log(N) Set.member test should be enough, not a full O(N) traversal of all states
 -- in the threshold set.
@@ -137,11 +151,11 @@ checkThresholds currentState thrshSet = case thrshSet of
 --   Further, as a result of running this get, you find out only which equivalence
 --   class the current state is at or above, not exactly which state within that
 --   equivalence class.
--- 
+--
 --   Finally, to make it easy to know WHICH set you got back, we allow each set to be
 --   tagged with an arbitrary additional value.  For example, it may be useful to use
 --   a unique `Int` for this purpose.
--- getPureLVarSets :: (JoinSemiLattice t, Eq t, Ord t, HasGet e) 
+-- getPureLVarSets :: (JoinSemiLattice t, Eq t, Ord t, HasGet e)
 --                 => PureLVar s t -> [(b, S.Set t)] -> Par e s (b, S.Set t)
 -- getPureLVarSets (PureLVar (WrapLVar lv)) thrshSets =
 --   WrapPar$ LI.getLV lv globalThresh deltaThresh
@@ -163,27 +177,27 @@ checkThresholds currentState thrshSet = case thrshSet of
 
 -- Huh, why is this not in Data.Set, analogous to Data.List.any
 -- anySet :: S.Set a -> (a -> Bool) -> Bool
--- anySet st fn = 
+-- anySet st fn =
 --   -- ARGH: this should short circuit.  Data.Set screws us up here by not giving us
 --   -- efficient iteration with control over recursion.
 --   S.foldl' (\ flg elm -> flg || fn elm) False st
 
 -- | Like `getPureLVar` but uses a threshold function rather than an explicit set.
-unsafeGetPureLVar :: (JoinSemiLattice t, Eq t, HasGet e) => PureLVar s t -> (t -> Bool) -> Par e s t
+unsafeGetPureLVar :: (BoundedJoinSemiLattice t, Eq t, HasGet e) => PureLVar s t -> (t -> Bool) -> Par e s t
 unsafeGetPureLVar (PureLVar (WrapLVar lv)) thrsh =
   WrapPar$ LI.getLV lv globalThresh deltaThresh
   where globalThresh ref _ = do
           x <- readIORef ref
           logDbgLn_ 5 "  [Pure] unsafeGetPureLVar: read the ref."
           deltaThresh x
-        deltaThresh x =          
+        deltaThresh x =
           return $! if thrsh x
                     then Just x
                     else Nothing
 
 -- | Wait until the pure LVar has crossed a threshold and then unblock.  (In the
 -- semantics, this is a singleton query set.)
-waitPureLVar :: (JoinSemiLattice t, Eq t, HasGet e) =>
+waitPureLVar :: (BoundedJoinSemiLattice t, Eq t, HasGet e) =>
                 PureLVar s t -> t -> Par e s ()
 waitPureLVar (PureLVar (WrapLVar iv)) thrsh =
    WrapPar$ LI.getLV iv globalThresh deltaThresh
@@ -194,10 +208,10 @@ waitPureLVar (PureLVar (WrapLVar iv)) thrsh =
         deltaThresh x | thrsh `joinLeq` x = do logDbgLn_ 5 "  [Pure] Delta thresh met!"
                                                return $ Just ()
                       | otherwise         = do logDbgLn_ 5 "  [Pure] Check Delta thresh.. Not yet."
-                                               return Nothing 
+                                               return Nothing
 
 -- | Put a new value which will be joined with the old.
-putPureLVar :: (JoinSemiLattice t, HasPut e) =>
+putPureLVar :: (BoundedJoinSemiLattice t, HasPut e) =>
                PureLVar s t -> t -> Par e s ()
 putPureLVar (PureLVar (WrapLVar iv)) !new =
     WrapPar $ LI.putLV iv putter
@@ -228,7 +242,7 @@ unsafeMonotonicHandlerHP mh (PureLVar (WrapLVar lv)) callb = WrapPar $ do
     return ()
   where
 --    deltaCB = undefined
-    deltaCB v = return$ Just$ unWrapPar $ callb v    
+    deltaCB v = return$ Just$ unWrapPar $ callb v
     globalCB ref unlockLVar = LI.liftIO $ do
        x <- readIORef ref -- Snapshot
        unlockLVar -- Gets to run early because it's pure.
@@ -239,7 +253,7 @@ unsafeMonotonicHandlerHP mh (PureLVar (WrapLVar lv)) callb = WrapPar $ do
 -- | Freeze the pure LVar, returning its exact value.
 --   Subsequent @put@s will raise an error.
 freezePureLVar :: HasFreeze e => PureLVar s t -> Par e s t
-freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$ 
+freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$
   do LI.freezeLV lv
      LI.getLV lv globalThresh deltaThresh
   where
@@ -257,7 +271,7 @@ fromPureLVar (PureLVar lv) =
 
 -- | Physical identity, just as with `IORef`s.
 instance Eq (PureLVar s v) where
-  PureLVar lv1 == PureLVar lv2 = state lv1 == state lv2 
+  PureLVar lv1 == PureLVar lv2 = state lv1 == state lv2
 
 -- `PureLVar` values can be returned as the result of a
 --  `runParThenFreeze`.  Hence they need a `DeepFrz` instance.

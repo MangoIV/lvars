@@ -1,34 +1,37 @@
-{-# LANGUAGE TemplateHaskell, DataKinds, ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 
 -- | Tests for the Data.LVar.PureSet and Data.LVar.SLSet modules.
 
 module BulkRetryTests(tests, runTests) where
 
-import Control.Monad
-import Control.Exception
-import qualified Data.Set as S
-import System.IO (stderr)
-import Test.Tasty.HUnit 
-import Test.Tasty (TestTree, defaultMain, testGroup)
+import           Control.Exception
+import           Control.Monad
+import qualified Data.Set                as S
+import           System.IO               (stderr)
+import           Test.Tasty              (TestTree, defaultMain, testGroup)
+import           Test.Tasty.HUnit
 --import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Tasty.TH (testGroupGenerator)
-import qualified Test.HUnit as HU
-import           TestHelpers as T
-import GHC.Conc (numCapabilities)
+import           GHC.Conc                (numCapabilities)
+import qualified Test.HUnit              as HU
+import           Test.Tasty.TH           (testGroupGenerator)
+import           TestHelpers             as T
 
 import           Control.LVish
-import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import           Control.LVish.BulkRetry
-import qualified Data.LVar.Generic as G
-import           Data.LVar.PureSet as IS
-import qualified Data.LVar.SLSet as SS
-import qualified Data.LVar.IVar as IV
-import           Data.LVar.NatArray as NA
+import           Control.LVish.DeepFrz   (DeepFrz (..), Frzn, Trvrsbl,
+                                          runParThenFreeze, runParThenFreezeIO)
+import qualified Data.LVar.Generic       as G
+import qualified Data.LVar.IVar          as IV
+import           Data.LVar.NatArray      as NA
+import           Data.LVar.PureSet       as IS
+import qualified Data.LVar.SLSet         as SS
 
-import Data.Par.Splittable (pforEach)
-import Data.Par.Range (range, fullpar)
+import           Data.Par.Range          (fullpar, range)
+import           Data.Par.Splittable     (pforEach)
 
-import qualified System.Log.TSLogger as L
+import qualified System.Log.TSLogger     as L
 
 --------------------------------------------------------------------------------
 
@@ -46,10 +49,10 @@ case_br_v1 = do
 
 -- | In the blocking version we should only execute each iteration once, and thus see
 -- an exact number of log messages.
-v1 = do 
+v1 = do
   (na :: NatArray s Int) <- NA.newNatArray 5
 --  forSpeculative (0,5) $ \ _hub ix -> do
-  pforEach (fullpar$ range 0 5) $ \ ix -> do  
+  pforEach (fullpar$ range 0 5) $ \ ix -> do
     logDbgLn 1 $ "ForSpeculative, START iter "++show ix
     case ix of
       0 -> void$ NA.get na 1
@@ -70,10 +73,10 @@ v1 = do
 case_br_v2 = do
   (logs,res) <- runParDetailed (DbgCfg Nothing [L.OutputTo stderr] False) numCapabilities v2
   case res of
-    Left e -> throw e
+    Left e  -> throw e
     Right x -> assertEqual "simple forSpeculative" [100,101,102,103,104] x
 
--- v2 = do 
+-- v2 = do
 --   (na :: NatArray s Int) <- NA.newNatArray 5
 --   forSpeculative (0,5) $ \ hub ix -> do
 --     logDbgLn 1 $ "ForSpeculative, START iter "++show ix
@@ -88,7 +91,7 @@ case_br_v2 = do
 --     return ()
 --   return "hi"
 
-v2 = do 
+v2 = do
   (na :: NatArray s Int) <- NA.newNatArray 5
   forSpeculative (0,5) $ \ hub ix -> do
     logDbgLn 1 $ "ForSpeculative, START iter "++show ix

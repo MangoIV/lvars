@@ -1,6 +1,6 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE TypeFamilies  #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 -- | A fast, parallel mergesort.
 --
@@ -29,14 +29,14 @@ import           Data.Vector.Generic.Mutable
 -- import qualified Control.Par.ST as PST
 -- import qualified Control.Par.ST.Vec2 as V2
 -- import qualified Data.Vector.Storable.Mutable as SV
-import qualified Data.Vector.Storable as S
-import qualified Control.Par.ST.StorableVec2 as S2
 import           Control.Par.MergeSort.Internal
+import qualified Control.Par.ST.StorableVec2    as S2
+import qualified Data.Vector.Storable           as S
 -- import        Data.Vector.Par.MergeSort
-import           Control.Par.Class (ParThreadSafe ())
-import qualified Control.Par.Class as PC
+import qualified Control.LVish                  as LV
+import           Control.Par.Class              (ParThreadSafe)
+import qualified Control.Par.Class              as PC
 import           Control.Par.EffectSigs
-import qualified Control.LVish as LV
 
 
 --------------------------------------------------------------------------------

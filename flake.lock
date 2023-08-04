@@ -16,6 +16,22 @@
         "type": "github"
       }
     },
+    "ctrie": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1462912884,
+        "narHash": "sha256-rnRRXjOUU4f2LY+lBHY6g7ubGIoPxXYcw3MRo16Neac=",
+        "owner": "iu-parfunc",
+        "repo": "ctrie",
+        "rev": "0ee9b4cd28cf2dae43eec22d39397d61526dbff1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "iu-parfunc",
+        "repo": "ctrie",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -226,6 +242,22 @@
         "type": "github"
       }
     },
+    "haskell-lockfree": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1666558322,
+        "narHash": "sha256-S85h9W+ksUvfsjDF5QlqRgVvQpYtsRfkaPrwwz6vhDA=",
+        "owner": "rrnewton",
+        "repo": "haskell-lockfree",
+        "rev": "de9f9c2499b8342a6dab36b11ecaedef7942c5cc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rrnewton",
+        "repo": "haskell-lockfree",
+        "type": "github"
+      }
+    },
     "hlint-35": {
       "flake": false,
       "locked": {
@@ -338,16 +370,16 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1691032976,
-        "narHash": "sha256-sPh58Zoh3M3aHH8w+XIq65GT2vCVMt3xHh5mphQgc8o=",
+        "lastModified": 1691107999,
+        "narHash": "sha256-OSzNTfUfqhMknwBxk/T9mxdKa7vAOUGzK+s2kx5iy2E=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8b9c44264303b5afe0c116f46b679d539e2be5ce",
+        "rev": "c01174aacb4094caadc08c0226768582923efc12",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
-        "ref": "nixpkgs-unstable",
+        "ref": "haskell-updates",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -451,8 +483,10 @@
     "root": {
       "inputs": {
         "concurrent-skiplist": "concurrent-skiplist",
+        "ctrie": "ctrie",
         "haskell-flake": "haskell-flake",
         "haskell-language-server": "haskell-language-server",
+        "haskell-lockfree": "haskell-lockfree",
         "nixpkgs": "nixpkgs_2",
         "parts": "parts",
         "pbbs-haskell": "pbbs-haskell",

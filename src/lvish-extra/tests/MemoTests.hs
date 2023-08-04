@@ -1,22 +1,24 @@
-{-# LANGUAGE TemplateHaskell, ParallelListComp #-}
+{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE TemplateHaskell  #-}
 
 -- | Test only the memoization functionality, corresponds to the @Data.LVar.Memo*@
 -- modules.
 
 module MemoTests where
-import Control.LVish
+import           Control.LVish
 
-import Data.LVar.CycGraph
+import           Data.LVar.CycGraph
 
-import qualified Data.LVar.IVar as IV
-import Data.Set as S
+import qualified Data.LVar.IVar     as IV
+import           Data.Set           as S
 --import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Tasty.TH (testGroupGenerator)
-import Test.Tasty    (defaultMain, TestTree)
-import Test.Tasty.HUnit (Assertion, assertEqual, assertBool, testCase) -- For macro-expansion.
+import           Test.Tasty         (TestTree, defaultMain)
+import           Test.Tasty.HUnit   (Assertion, assertBool, assertEqual,
+                                     testCase)
+import           Test.Tasty.TH      (testGroupGenerator)
 -- import TestHelpers (defaultMainSeqTests)
 
-import Prelude as P
+import           Prelude            as P
 
 --------------------------------------------------------------------------------
 -- Unit Tests
@@ -35,7 +37,7 @@ cyc03 :: IO String
 cyc03 = runParIO $ exploreGraph fn1 fn2 33
  where
    fn1 33 = return [44]
-   fn1 44 = return [33]   
+   fn1 44 = return [33]
    fn2 cyc k nbrs = return ("key "++show k++" cyc "++show cyc++" nbrs "++show (P.map fst nbrs))
 
 cyc04 :: IO String
@@ -51,7 +53,7 @@ cyc04 = runParIO $ exploreGraph fn1 hndlr 33
      return ("key="++show k++" cyc:"++show cyc++" nbrs:("++
              concat [ show k++","++str++" " | (k,_) <- nbrs | str <- vals ] ++")")
 -}
-   
+
 -----------------------------------------------
 -- Test the sequential cycle-detection approach
 -----------------------------------------------

@@ -1,5 +1,8 @@
-{-# LANGUAGE ScopedTypeVariables, BangPatterns, ConstraintKinds, TypeFamilies #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 -- | EXPERIMENTAL version which eventually should be made generic across Par monads
 -- (i.e. a BulkRetryT transformer), and should thus be extended to transparently
@@ -10,24 +13,24 @@ module Control.LVish.BulkRetry
 
        where
 
-import qualified Data.Bits.Atomic as B
-import Foreign.Storable (sizeOf, Storable)
-import Control.Monad (unless) 
-import Control.LVish
-import Control.LVish.Internal (unsafeDet)
-import Control.Par.Class (LVarSched(returnToSched))
+import           Control.LVish
+import           Control.LVish.Internal    (unsafeDet)
+import           Control.Monad             (unless)
+import           Control.Par.Class         (LVarSched (returnToSched))
+import qualified Data.Bits.Atomic          as B
+import           Foreign.Storable          (Storable, sizeOf)
 -- import Data.LVar.NatArray
-import Data.LVar.NatArray.Unsafe (NatArray, unsafePeek)
+import           Data.LVar.NatArray.Unsafe (NatArray, unsafePeek)
 
-import Data.Par.Splittable (pforEach)
-import Data.Par.Range (range)
-import Data.Par.Set () -- Instances only.
+import           Data.Par.Range            (range)
+import           Data.Par.Set              ()
+import           Data.Par.Splittable       (pforEach)
 
-import qualified Data.Foldable as F
-import qualified Data.Set as S
+import qualified Data.Foldable             as F
+import qualified Data.Set                  as S
 -- import           Data.LVar.PureSet as IS
-import           Data.LVar.SLSet as IS
-import           Data.LVar.Generic (freeze)
+import           Data.LVar.Generic         (freeze)
+import           Data.LVar.SLSet           as IS
 
 -- import Data.Par.Range
 
@@ -40,7 +43,7 @@ data RetryHub s = RetryHub (ISet s Int) -- ^ This stores the iterations that fai
 -- -- | Non-blocking get on a `NatArray`.
 -- getNB :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
 --          RetryHub s -> NatArray s elt -> Int -> Par e s elt
--- -- LVarSched (Par e s)         
+-- -- LVarSched (Par e s)
 -- getNB (RetryHub fails) arr ind = do
 --   x <- unsafePeek arr ind
 --   -- if empty, don't block, do this:
@@ -65,7 +68,7 @@ getNB_cps :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt) =>
          -> Int                 -- ^ Which index to get
          -> (elt -> Par e s ()) -- ^ Delimited continuation.
          -> Par e s ()
--- LVarSched (Par e s)         
+-- LVarSched (Par e s)
 getNB_cps (RetryHub fails thisiter) arr ind cont = do
   x <- unsafePeek arr ind
   -- if empty, don't block, do this:
@@ -84,7 +87,7 @@ desired_tasks = 16 -- FIXME: num procs * overpartition
 -- | A parallel for-loop which aborts and retries failed iterations in bulk, rather
 -- than allowing them to "block" and suffering the overhead of capturing and storing
 -- their continuations.
--- 
+--
 -- `forSpeculative` continues retrying until ALL iterations have completed.  It is
 -- thus a *synchronous* parallel for loop.
 forSpeculative :: Idempotent e => (Int, Int)  -- ^ Inclusive/Exclusive range to run.
@@ -100,12 +103,12 @@ forSpeculative (st,end) bodyfn = do
       -- TODO: automatic strategies for tuning the input prefix size would be helpful.
       -- One approach that might make sense would be to auto-tune based on the
       -- time/iteration observed.  That is, gradually increase to try to approximate a
-      -- minimum reasonable task size and no bigger.  
+      -- minimum reasonable task size and no bigger.
 
       body' = bodyfn
       -- body' retry ix = bodyfn retry ix
-  
-  let flush leftover fails = 
+
+  let flush leftover fails =
         -- unless (S.null leftover) $ do
           -- TODO: need parallel fold, this is sequential...
           F.foldlM (\ () ix -> do
@@ -115,29 +118,29 @@ forSpeculative (st,end) bodyfn = do
   let flushLoop leftover =  do
         fails <- newEmptySet
         -- FIXME: Add parallelism
-        flush leftover fails -- Sequential...        
+        flush leftover fails -- Sequential...
         snap <- unsafeDet $ freeze fails
         logDbgLn 3 $ " [dbg-lvish] forSpeculative: did one sequential flush, remaining: "++show snap
         unless (S.null snap) $
           -- error$ "forSpeculative: failures not flushed with a sequential run!:\n "++show snap
           flushLoop snap
-      
-  -- Outer loop of "rounds", in which we try a prefix of the iteration space.  
+
+  -- Outer loop of "rounds", in which we try a prefix of the iteration space.
   let loop !round leftover offset 0 = do
         logDbgLn 3 $ " [dbg-lvish] forSpeculative: got to the end, only failures left."
         flushLoop leftover
-        
+
       loop !round leftover offset remain = do
         logDbgLn 3 $ " [dbg-lvish] forSpeculative starting round "++
                      show round++": offset "++show offset++", remaining "++show remain
         -- Set of iterations that failed in THIS upcoming round:
         fails <- newEmptySet
-        let chunkend = offset + (min prefix remain)        
+        let chunkend = offset + (min prefix remain)
 
         hp <- newPool
         -- Here we keep the failed iterations "to the left" of the new batch, i.e. we
         -- fork them first.
-        
+
         -- FINISHME: need Split instance.
         logDbgLn 4 $ " [dbg-lvish] forSpeculative RElaunching failures: "++show leftover
         -- This version is poor because it forks on a per-iteration basis upon retry:
@@ -145,13 +148,13 @@ forSpeculative (st,end) bodyfn = do
         -- F.foldrM (\ ix () -> body' (RetryHub fails ix) ix) () leftover
         -- pforEach leftover $ bodyfn (RetryHub fails)
         asyncForEachHP (Just hp) leftover $ \ ix -> bodyfn (RetryHub fails ix) ix
-        
+
         -- TODO: if we keep failing it's better to expand the prefix.  That way we
         -- end up with a logarithmic number of retries for each iterate in the worst
         -- case, rather than linear (making the whole loop unnecessarily quadratic).
 
         logDbgLn 4 $ " [dbg-lvish] forSpeculative launching new batch: "++show (offset,chunkend)
-        asyncForEachHP (Just hp) (range offset chunkend) $ \ ix -> 
+        asyncForEachHP (Just hp) (range offset chunkend) $ \ ix ->
           body' (RetryHub fails ix) ix
         logDbgLn 4 $ " [dbg-lvish] forSpeculative: return from par for-loop; now quiesce."
         quiesce hp
@@ -159,5 +162,5 @@ forSpeculative (st,end) bodyfn = do
         snap <- unsafeDet $ freeze fails
         logDbgLn 4 $ " [dbg-lvish] forSpeculative finish round; failed iterates: "++show snap
         loop (round+1) snap chunkend (remain - (chunkend - offset))
-  loop 0 S.empty 0 sz       
+  loop 0 S.empty 0 sz
   -- After the last quiesce, we're done.

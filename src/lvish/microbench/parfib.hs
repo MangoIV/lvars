@@ -1,14 +1,14 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP       #-}
 {-# LANGUAGE DataKinds #-}
 {-# OPTIONS_GHC -O2 #-}
-import Data.Int
-import System.Environment
-import GHC.Conc
+import           Data.Int
+import           GHC.Conc
+import           System.Environment
 
-import qualified Control.LVish as L
+import qualified Control.LVish          as L
 import qualified Control.LVish.Internal as LI
 -- import Control.LVish (runPar)
-import Data.LVar.IVar
+import           Data.LVar.IVar
 type Par = L.Par L.Det ()
 runPar = LI.unsafeRunPar
 ------------------------------------------------------------
@@ -25,7 +25,7 @@ fib x = fib (x-2) + fib (x-1)
 -- Par monad version:
 parfib1 :: FibType -> Par FibType
 parfib1 n | n < 2 = return 1
-parfib1 n = do 
+parfib1 n = do
 --    xf <- spawn1_ parfib1 (n-1)
     xf <- spawn_$ parfib1 (n-1)
     y  <-         parfib1 (n-2)
@@ -35,7 +35,7 @@ parfib1 n = do
 -- Par monad version, with threshold:
 parfib1B :: FibType -> FibType -> Par FibType
 parfib1B n c | n <= c = return $ fib n
-parfib1B n c = do 
+parfib1B n c = do
     xf <- spawn_$ parfib1B (n-1) c
     y  <-         parfib1B (n-2) c
     x  <- get xf
@@ -44,54 +44,54 @@ parfib1B n c = do
 -- Gratuitously nested Par monad version:
 parfibNest :: FibType -> FibType -> Par FibType
 parfibNest n c | n <= c = return $ fib n
-parfibNest n c = do 
+parfibNest n c = do
     xf <- spawnP $ runPar $ helper (n-1) c
     yf <- spawnP $ runPar $ helper (n-2) c
     x  <- get xf
     y  <- get yf
     return (x+y)
- where 
+ where
   -- Alternate between nesting and regular spawning:
   helper :: FibType -> FibType -> Par FibType
   helper n c | n <= c = return $ fib n
-  helper n c = do 
+  helper n c = do
     xf <- spawn_$ parfibNest (n-1) c
     y  <-         parfibNest (n-2) c
     x  <- get xf
     return (x+y)
 
 
-main = do 
+main = do
     args <- getArgs
-    let (version, size, cutoff) = case args of 
+    let (version, size, cutoff) = case args of
             []      -> ("monad", 20, 1)
             [v]     -> (v,       20, 1)
             [v,n]   -> (v, read n,   1)
             [v,n,c] -> (v, read n, read c)
 
-    case version of 
-        "nested" -> do 
+    case version of
+        "nested" -> do
                 print$ runPar$ parfibNest size cutoff
-        "monad"  -> 
-		if cutoff == 1 
+        "monad"  ->
+		if cutoff == 1
                 then do putStrLn "Using non-thresholded version:"
-                        print$ runPar$ parfib1  size 
+                        print$ runPar$ parfib1  size
 		else    print$ runPar$ parfib1B size cutoff
         -- TEMP: force thresholded version even if cutoff==1
         "thresh" -> print$ runPar$ parfib1B size cutoff
         _        -> error$ "unknown version: "++version
 
 
-{- 
+{-
 
 [2011.03] On 4-core nehalem, 3.33ghz:
 -------------------------------------
 
   Non-monadic version, real/user time:
   fib(40) 4 threads: 1.1s 4.4s
-  fib(42) 1 threads: 9.7s  
+  fib(42) 1 threads: 9.7s
   fib(42) 4 threads: 2.86s 11.6s  17GB allocated -- 3.39X
-  
+
      SPARKS: 433784785 (290 converted, 280395620 pruned)
 
   Monad-par version:
@@ -119,7 +119,7 @@ item collection (so there are many insertions, but only a small
 number of resident items), then I get these numbers:
 
   fib(34) 1 thread: 22.78
-  fib(34) 4 thread: 13.96 -- 1.63X 
+  fib(34) 4 thread: 13.96 -- 1.63X
 
 ESTIMATED 3573.76 seconds for fib(42).
 
@@ -129,7 +129,7 @@ ESTIMATED 3573.76 seconds for fib(42).
 
 Initial version forks a new thread on every get, which does terribly of course.
 
-    +RTS -N1 : 
+    +RTS -N1 :
      fib(24) 2.3s vs. 0.086
 
 
@@ -138,13 +138,13 @@ Initial version forks a new thread on every get, which does terribly of course.
 
 Testing schedulers directly, without going through the generic (type
 class) interface.  Starting with Scheds.Sparks:
-  user/system time: 
+  user/system time:
 
   fib(42) 4 threads: 4.56  17.83   -- Sparks
-  fib(42) 4 threads: 50.0  191.6   -- Trace 
+  fib(42) 4 threads: 50.0  191.6   -- Trace
 
 
-[2011.10.24] {Timing nested scheduler version} 
+[2011.10.24] {Timing nested scheduler version}
 ----------------------------------------------
 
 Checking for performance regression.  This is on a 3.1 GHz Westmere
@@ -166,7 +166,7 @@ And with the Sparks scheduler:
     fib(42) 4 threads:   1.0   3.8    100%   11MB -- cutoff 10
 
 And the plain par/pseq version:
-    fib(42) 1 thread :   8.7   8.6    86.2%  17GB 
+    fib(42) 1 thread :   8.7   8.6    86.2%  17GB
     fib(42) 4 threads:   2.8   10.5   73.9%  17GB
 
 And then for regression testing the ORIGINAL Trace scheduler (no nesting support):
@@ -182,7 +182,7 @@ And the perversely Nested parfib:
     nfib(38) 1 thread :   3.3   3.2    82.7%  12G      -- nested but Sparks.hs
     nfib(38) 4 threads:   1.1   4.1    70.9%  12.9GB   -- nested but Sparks.hs
 
-Oops!  That was with the sparks scheduler!  Here's the actual Trace/nested:    
+Oops!  That was with the sparks scheduler!  Here's the actual Trace/nested:
     nfib(30) 4 threads:   1.3   4.8    93.5%  7GB    -- super nested fib / trace
     nfib(32) 4 threads:   3.26  11.7   92.9%  18GB
     nfib(42) 4 threads:   6.5   23.5   94.7%  29.6GB -- cutoff 10:

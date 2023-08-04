@@ -2,7 +2,7 @@
 
 module Data.Concurrent.Counter(Counter, new, inc, dec, poll) where
 
-import Data.IORef
+import           Data.IORef
 
 type Counter = IORef Int
 

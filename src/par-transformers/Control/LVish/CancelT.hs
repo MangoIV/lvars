@@ -1,8 +1,15 @@
-{-# LANGUAGE ConstraintKinds, GeneralizedNewtypeDeriving, InstanceSigs,
-             MultiParamTypeClasses, NamedFieldPuns, ScopedTypeVariables,
-             TypeFamilies, UndecidableInstances, Unsafe #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs               #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE Unsafe                     #-}
 
-{-# LANGUAGE DataKinds, FlexibleContexts #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
 
 -- | A module for adding the cancellation capability.
 --
@@ -35,13 +42,13 @@ module Control.LVish.CancelT
        )
        where
 
-import Control.Monad.State as S
-import Data.IORef
+import           Control.Monad.State      as S
+import           Data.IORef
 
-import Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParMonad (..))
-import Control.Par.EffectSigs as E
-import qualified Data.Atomics.Counter as C
+import           Control.Par.Class        as PC
+import           Control.Par.Class.Unsafe (ParMonad (..))
+import           Control.Par.EffectSigs   as E
+import qualified Data.Atomics.Counter     as C
 --------------------------------------------------------------------------------
 
 -- | A Par-monad scheduler transformer that adds the cancellation capability.
@@ -283,7 +290,7 @@ instance forall p .
 
   newLV act = PC.lift $ newLV act
 
-  stateLV lvar = 
+  stateLV lvar =
     case stateLV lvar of
      (_::Proxy (p e s ()), a) -> (Proxy, a)
 

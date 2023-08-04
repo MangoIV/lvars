@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds    #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | An unsigned integer (aka `Word`) LVar that exposes a
@@ -15,13 +15,15 @@ module Data.LVar.Counter
          -- TODO: support other reductions than (+).
        ) where
 
-import Control.LVish hiding (put)
-import Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), state, liftIO)
-import Control.LVish.DeepFrz.Internal
-import qualified Control.LVish.Internal.SchedIdempotent as LI 
+import           Control.LVish                          hiding (put)
+import           Control.LVish.DeepFrz.Internal
+import           Control.LVish.Internal                 (LVar (WrapLVar),
+                                                         Par (WrapPar), liftIO,
+                                                         state)
+import qualified Control.LVish.Internal.SchedIdempotent as LI
 -- import qualified Data.Atomics.Counter.Reference as AC
-import qualified Data.Atomics.Counter as AC
-import           System.IO.Unsafe (unsafeDupablePerformIO)
+import qualified Data.Atomics.Counter                   as AC
+import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
 --------------------------------------------------------------------------------
 
@@ -47,13 +49,13 @@ increment (Counter (WrapLVar lv)) n =
 
 -- | Wait until the maximum observed value reaches some threshold, then return.
 waitThresh :: HasGet e => Counter s -> Word -> Par e s ()
-waitThresh (Counter (WrapLVar lv)) thrsh = 
+waitThresh (Counter (WrapLVar lv)) thrsh =
   WrapPar $ LI.getLV lv globalThresh deltaThresh
   where globalThresh ctr _ = do
           x <- AC.readCounter ctr
           deltaThresh $ fromIntegral x
         deltaThresh x | thrsh <= x = do return $ Just ()
-                      | otherwise    = do return Nothing 
+                      | otherwise    = do return Nothing
 
 -- | Observe what the final value of the `Counter` was.
 freezeCounter :: HasFreeze e => Counter s -> Par e s Word
@@ -70,7 +72,7 @@ freezeCounter (Counter (WrapLVar lv)) =
 -- | Once frozen, for example by `runParThenFreeze`, a `Counter` can be converted
 -- directly into a `Word`.
 fromCounter :: Counter Frzn -> Word
-fromCounter (Counter lv) = unsafeDupablePerformIO $ do 
+fromCounter (Counter lv) = unsafeDupablePerformIO $ do
    n <- AC.readCounter (state lv)
    return $! fromIntegral n
 
@@ -91,18 +93,18 @@ newSum n = do x <- liftIO$ AC.newCounter n
 {-
 -- | Increment the counter by a given amount.
 addSum :: HasBump e => Sum s -> Int -> Par e s ()
-addSum (Sum ctr) n = liftIO $ do 
-  n' <- AC.incrCounter n ctr  
-  -- When 
-  if (n' == minBound) 
+addSum (Sum ctr) n = liftIO $ do
+  n' <- AC.incrCounter n ctr
+  -- When
+  if (n' == minBound)
    then error "addSum: Sum LVar was previously frozen and then bumped, or it overflowed."
    else return ()
 -}
 
 -- | Increment the sum by one.
 incrSum :: HasBump e => Sum s -> Par e s ()
-incrSum (Sum ctr) = liftIO $ do 
-  n' <- AC.incrCounter 1 ctr  
+incrSum (Sum ctr) = liftIO $ do
+  n' <- AC.incrCounter 1 ctr
   if (n' == minBound)
    then error "addSum: Sum LVar was previously frozen and then bumped, or it overflowed."
    else return ()
@@ -118,5 +120,5 @@ freezeSum (Sum ctr) = liftIO $ do
      (b,_t) <- AC.casCounter ctr tck maxBound
      if b then return $! AC.peekCTicket tck
           else error "freezeSum: collided with something else"
-      
-  
+
+

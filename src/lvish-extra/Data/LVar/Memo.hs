@@ -22,7 +22,7 @@ module Data.LVar.Memo
          -- * Memo table operations
          getLazy, getMemo, force
        ) where
-import Debug.Trace
+import           Debug.Trace
 
 import           Control.LVish
 import qualified Data.LVar.PureMap as IM

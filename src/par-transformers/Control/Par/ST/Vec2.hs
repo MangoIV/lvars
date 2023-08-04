@@ -38,13 +38,13 @@ module Control.Par.ST.Vec2
        )
        where
 
-import           Control.Par.Class.Unsafe   (ParThreadSafe)
-import           Control.Par.ST hiding (reify)
+import           Control.Par.Class.Unsafe (ParThreadSafe)
+import           Control.Par.ST           hiding (reify)
 
-import qualified Control.Monad.Reader as R
+import qualified Control.Monad.Reader     as R
 -- import qualified Control.Monad.State.Strict as S
-import qualified Data.Vector.Mutable        as MU
-import           Prelude                    hiding (drop, length, read, take)
+import qualified Data.Vector.Mutable      as MU
+import           Prelude                  hiding (drop, length, read, take)
 
 #define CONSTRAINT(e)
 #define FLIPTY MVectorFlp

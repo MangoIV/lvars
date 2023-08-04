@@ -1,33 +1,34 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 -- | Tests for the Data.LVar.PureSet and Data.LVar.SLSet modules.
 
 module SetTests(tests, runTests) where
 
-import Test.Tasty.HUnit 
-import Test.Tasty (TestTree, defaultMain, testGroup)
+import           Test.Tasty             (TestTree, defaultMain, testGroup)
+import           Test.Tasty.HUnit
 -- import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Tasty.TH (testGroupGenerator)
-import qualified Test.HUnit as HU
-import           TestHelpers as T
-import           TestHelpers2 (stressTest, stressTestReps)
+import qualified Test.HUnit             as HU
+import           Test.Tasty.TH          (testGroupGenerator)
+import           TestHelpers            as T
+import           TestHelpers2           (stressTest, stressTestReps)
 
-import           Control.Monad (forM_)
-import qualified Data.Set as S
-import qualified Data.LVar.Generic as G
-import Data.LVar.PureSet as IS
-import qualified Data.LVar.SLSet as SS
-import qualified Data.LVar.IVar as IV
+import           Control.Monad          (forM_)
+import qualified Data.LVar.Generic      as G
+import qualified Data.LVar.IVar         as IV
+import           Data.LVar.PureSet      as IS
+import qualified Data.LVar.SLSet        as SS
+import qualified Data.Set               as S
 
 import           Control.LVish
-import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
+import           Control.LVish.DeepFrz  (DeepFrz (..), Frzn, Trvrsbl,
+                                         runParThenFreeze, runParThenFreezeIO)
 import           Control.LVish.Internal (liftIO)
-import qualified System.Log.TSLogger as L
+import qualified System.Log.TSLogger    as L
 
 --------------------------------------------------------------------------------
 
@@ -47,7 +48,7 @@ makeCommonSetTests mknew insert frmList =
   ]
 
 -- type Det = Ef P G NF B NI
-type Full = Ef P G F B I 
+type Full = Ef P G F B I
 
 tests :: TestTree
 tests =
@@ -55,8 +56,8 @@ tests =
   [ testGroup "PureSet" (makeCommonSetTests IS.newEmptySet IS.insert IS.newFromList)
 --  , testGroup "SLSet"   (makeCommonSetTests SS.newEmptySet SS.insert SS.newFromList)
   ]
-    
-           
+
+
 --------------------------------------------------------------------------------
 
 case_v2a :: Assertion
@@ -65,17 +66,17 @@ case_v2a = v2a >>= assertEqual "put 10 in & wait"
 
 -- [2013.06.27] getting thread-blocked-indefinitely errors:
 v2a :: IO (S.Set Int)
-v2a = runParNonDet $ isND $ 
+v2a = runParNonDet $ isND $
      do s <- IS.newEmptySet
         mapM_ (\n -> fork $ IS.insert n s) [1..10]
-        IS.waitSize 10 s 
+        IS.waitSize 10 s
         IS.freezeSet s
 
 -- | This version uses a fork-join so it doesn't need the waitSize:
 case_v2b :: Assertion
 case_v2b = v2b >>= assertEqual "t2 with spawn instead of fork"
            (S.fromList [1..10] :: S.Set Int)
-           
+
 v2b :: IO (S.Set Int)
 v2b = runParNonDet $ isND $
      do s   <- IS.newEmptySet
@@ -83,30 +84,30 @@ v2b = runParNonDet $ isND $
         mapM_ IV.get ivs -- Join point.
         IS.freezeSet s
 
--- | This version uses deep freeze.        
+-- | This version uses deep freeze.
 case_v2c :: Assertion
 case_v2c = assertEqual "t2 with spawn instead of fork"
              (S.fromList [1..10] :: S.Set Int)
              (IS.fromISet v2c)
-             
+
 -- v2c :: S.Set Int
 v2c :: IS.ISet Frzn Int
 v2c = -- IS.fromISet $
       runParThenFreeze $ isDet par
   where
     par :: (HasPut e, HasGet e) => Par e s (IS.ISet s Int)
-    par = 
-     do s   <- IS.newEmptySet 
+    par =
+     do s   <- IS.newEmptySet
         ivs <- mapM (\n -> IV.spawn_ $ IS.insert n s) [1..10::Int]
         mapM_ IV.get ivs -- Join point.
         return s
 
 case_v3a :: Assertion
 case_v3a = (v3a >>= assertEqual "withCallbacksThenFreeze / waitSize then freeze" v3b_ans)
-               
+
 -- [2013.06.27] This is failing just occasionally with a multiple-put:
-v3a :: IO (S.Set Int)          
-v3a = runParNonDet $ isND $ 
+v3a :: IO (S.Set Int)
+v3a = runParNonDet $ isND $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2
@@ -114,22 +115,22 @@ v3a = runParNonDet $ isND $
           -- Populate the first set, except do it in parallel.
           -- Unless we wait on a handler here, withCallbacksThenFreeze doesn't care
           -- whether these extra forks are complete when it returns.
-          mapM_ (\n -> fork $ IS.insert n s1) [1.. v3b_sz]        
+          mapM_ (\n -> fork $ IS.insert n s1) [1.. v3b_sz]
           -- We never read out of s1 directly.  Instead, writes to s1 trigger the
           -- callback 'fn' to run, with the element written to s2.  So eventually,
           -- ten elements are written to s2.
           IS.waitSize v3b_sz s2
           IS.freezeSet s2
-                  
+
 v3b_sz :: Int
 v3b_sz = 10
-         
+
 v3b_ans :: S.Set Int
 v3b_ans = S.fromList (map (*10) [1..v3b_sz])
-                  
+
 -- v3b :: IO (S.Set Int)
-v3b :: Par (Full) s  (S.Set Int) 
-v3b = 
+v3b :: Par (Full) s  (S.Set Int)
+v3b =
      do chatterOTR " [v3b] Begin test: allocating sets."
         s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
@@ -145,32 +146,32 @@ v3b =
           -- Because we filled s1 sequentially, we know it is full at this point.
           -- (If the above were forked we would need a finish/asnyc style construct)
 
-        chatterOTR " [v3b] AFTER withCallbacksThenFreeze.."                     
+        chatterOTR " [v3b] AFTER withCallbacksThenFreeze.."
         -- After all of s1's callbacks are finished executing, s2 is full:
         x <- IS.freezeSet s2
-        chatterOTR " [v3b] set frozen.. now return"          
+        chatterOTR " [v3b] set frozen.. now return"
         return x
 
-chatterOTR = dbgChatterOnly 1 
+chatterOTR = dbgChatterOnly 1
 
 -- | An under-synchronized test.  This should always return the same
 -- result OR throw an exception.  In this case it should always return
 -- a list of 10 elements, or throw an exception.
 case_i3c :: Assertion
-case_i3c = do 
-  allowSomeExceptions ["Attempt to change a frozen LVar"] $ 
+case_i3c = do
+  allowSomeExceptions ["Attempt to change a frozen LVar"] $
     do x <- i3c
        assertEqual "under-synchronized passed through"
       	           (S.fromList [10,20..100] :: S.Set Int) x
   return ()
-    
+
 i3c :: IO (S.Set Int)
-i3c = runParNonDet $ isND $ 
+i3c = runParNonDet $ isND $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do
-          mapM_ (\n -> fork $ IS.insert n s1) [1..10]          
+          mapM_ (\n -> fork $ IS.insert n s1) [1..10]
           IS.waitSize 1 s2 -- Not ENOUGH synchronization!
           IS.freezeSet s2
           -- If this ^ freeze occurs *before* all the puts have happened,
@@ -197,7 +198,7 @@ case_v3d = assertEqual "test of parallelism in freezeSetAfter"
 -- | This test has interdependencies between callbacks (that are launched on
 -- already-present data), which forces these to be handled in parallel.
 v3d :: IO (S.Set Int)
-v3d = runParNonDet $ isND $ 
+v3d = runParNonDet $ isND $
      do s1 <- IS.newFromList [1..5]
         s2 <- IS.newEmptySet
         IS.freezeSetAfter s1 $ \ elm -> do
@@ -212,7 +213,7 @@ v3d = runParNonDet $ isND $
             Just d -> do logDbgLn 1 $ "  [Invocation "++show elm++"] waiting on "++show dep
                          IS.waitElem d s2
                          logDbgLn 1 $ "  [Invocation "++show elm++"] dependency satisfied! "
-          IS.insert elm s2 
+          IS.insert elm s2
         logDbgLn 1 " [freezeSetAfter completed] "
         freezeSet s2
 
@@ -245,7 +246,7 @@ v3e = runParNonDet $ isND $ IS.freezeSet =<<
 
 --------------------------------------------------------------------------------
 -- Higher level derived ops
---------------------------------------------------------------------------------  
+--------------------------------------------------------------------------------
 
 case_v8a :: Assertion
 case_v8a = assertEqual "simple cartesian product test"
@@ -289,7 +290,7 @@ v8b = runParNonDet $ isND $ do
   s4 <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
   IS.forEachHP (Just hp) s4 $ \ elm ->
     logDbgLn 1 $ " [v8b]   Got element: "++show elm
-  -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
+  -- [2013.07.03] Confirmed: this makes the bug(s) go away:
   -- liftIO$ threadDelay$ 100*1000
   quiesce hp
   logDbgLn 1 " [v8b] quiesce finished, next freeze::"

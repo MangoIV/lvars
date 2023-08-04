@@ -13,18 +13,18 @@ module Data.BitList
   )
 where
 
-import           Data.Bits hiding (popCount)
-import qualified Data.Bits as B
+import           Data.Bits           hiding (popCount)
+import qualified Data.Bits           as B
 import           Data.Int
-import qualified Data.List as L
+import qualified Data.List           as L
 import           Data.Word
-import           Prelude   hiding (drop, head, length, null, reverse, tail,
-                            (>>))
+import           Prelude             hiding (drop, head, length, null, reverse,
+                                      tail, (>>))
 
 #ifdef TESTING
-import Test.HUnit
-import Test.QuickCheck     hiding ((.&.))
-import Test.QuickCheck.Gen
+import           Test.HUnit
+import           Test.QuickCheck     hiding ((.&.))
+import           Test.QuickCheck.Gen
 #endif
 
 -- | An immutable list of bits.

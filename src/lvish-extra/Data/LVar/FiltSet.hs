@@ -1,9 +1,9 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE BangPatterns              #-}
+{-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE MagicHash                 #-}
+{-# LANGUAGE TypeFamilies              #-}
 
 module Data.LVar.FiltSet
        (
@@ -17,30 +17,30 @@ module Data.LVar.FiltSet
        )
        where
 
-import GHC.Prim
+import           GHC.Prim
 
-import Control.LVish
-import Control.LVish.DeepFrz (runParThenFreeze)
-import Control.LVish.DeepFrz.Internal
-import Control.LVish.Internal
-import Data.LVar.Generic(PartialJoinSemiLattice(..))
-import Data.LVar.LayeredSatMap (LayeredSatMap)
-import Data.LVar.LayeredSatMap (LayeredSatMap(..), LSMContents(..))
-import qualified Data.LVar.LayeredSatMap as LSM
+import           Control.LVish
+import           Control.LVish.DeepFrz                  (runParThenFreeze)
+import           Control.LVish.DeepFrz.Internal
+import           Control.LVish.Internal
 import qualified Control.LVish.Internal.SchedIdempotent as L
+import           Data.LVar.Generic                      (PartialJoinSemiLattice (..))
+import           Data.LVar.LayeredSatMap                (LSMContents (..),
+                                                         LayeredSatMap (..))
+import qualified Data.LVar.LayeredSatMap                as LSM
 
-import Control.Monad (forM)
-import Data.Atomics (atomicModifyIORefCAS)
-import qualified Data.Foldable as F
-import qualified Data.Map as M
-import Data.Maybe (catMaybes, isJust)
-import Data.Monoid (Monoid)
-import qualified Data.Set as S
-import Data.IORef
+import           Control.Monad                          (forM)
+import           Data.Atomics                           (atomicModifyIORefCAS)
+import qualified Data.Foldable                          as F
+import           Data.IORef
+import qualified Data.Map                               as M
+import           Data.Maybe                             (catMaybes, isJust)
+import           Data.Monoid                            (Monoid)
+import qualified Data.Set                               as S
 -- import Data.TLS.GCC
-import Data.TLS.GHC
-import GHC.Prim (unsafeCoerce#)
-import System.IO.Unsafe (unsafeDupablePerformIO)
+import           Data.TLS.GHC
+import           GHC.Prim                               (unsafeCoerce#)
+import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
 newtype FiltSet s f a = FiltSet (LVar s (TLS (IORef ([f s a], [f s a]))) (f s a))
 
@@ -82,7 +82,7 @@ instance Ord k => SaturatingLVar (LayeredSatMap k) where
         Nothing -> L.logStrLn 5 $ " [LayeredSatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
         Just a -> L.logStrLn 5 (" [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback.") >> a
       where
-        fn n@(Nothing, _) = (n, Nothing)
+        fn n@(Nothing, _)  = (n, Nothing)
         -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
         fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
 
@@ -93,7 +93,7 @@ instance Ord k => SaturatingLVar (LayeredSatMap k) where
 
   finalizeOrd lsm@(LayeredSatMap lv) = case LSM.fromIMap lsm of
                                          Nothing -> Nothing
-                                         Just m -> Just $ AFoldableOrd m
+                                         Just m  -> Just $ AFoldableOrd m
 
 newEmptySet :: Par e s (FiltSet s f a)
 newEmptySet = newFromList []

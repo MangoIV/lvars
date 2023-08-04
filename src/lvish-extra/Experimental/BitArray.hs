@@ -1,13 +1,13 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 -- UNFINISHED!!!
 
@@ -18,9 +18,9 @@ module Data.LVar.BoundedNatSet
          -- * Basic operations
          BitArray,
          -- Snapshot(BitArraySnap),
-         
+
          newEmptyBitArray, putBits,
-         -- waitElem, waitSize, 
+         -- waitElem, waitSize,
 
          -- -- * Iteration and callbacks
          forEach, forEachHP
@@ -30,7 +30,7 @@ module Data.LVar.BoundedNatSet
 
          -- -- * Higher-level derived operations
          -- copy, traverseSet, traverseSet_, union, intersection,
-         -- cartesianProd, cartesianProds, 
+         -- cartesianProd, cartesianProds,
 
          -- -- * Alternate versions of derived ops that expose HandlerPools they create.
          -- forEachHP, traverseSetHP, traverseSetHP_,
@@ -41,28 +41,31 @@ module Data.LVar.BoundedNatSet
 -- import qualified Data.Vector.Unboxed.Mutable as M
 
 
-import qualified Data.Vector.Storable as U
-import qualified Data.Vector.Storable.Mutable as M
-import Foreign.Marshal.MissingAlloc (callocBytes)
-import Foreign.Marshal.Alloc (finalizerFree)
-import Foreign.Storable (sizeOf, Storable)
-import Foreign.ForeignPtr (newForeignPtr, withForeignPtr)
-import qualified Foreign.Ptr as P
-import qualified Data.Bits.Atomic as B
-import Data.Bits ((.&.))
+import           Data.Bits                              ((.&.))
+import qualified Data.Bits.Atomic                       as B
+import qualified Data.Vector.Storable                   as U
+import qualified Data.Vector.Storable.Mutable           as M
+import           Foreign.ForeignPtr                     (newForeignPtr,
+                                                         withForeignPtr)
+import           Foreign.Marshal.Alloc                  (finalizerFree)
+import           Foreign.Marshal.MissingAlloc           (callocBytes)
+import qualified Foreign.Ptr                            as P
+import           Foreign.Storable                       (Storable, sizeOf)
 
-import           Control.Monad (void)
+import           Control.Monad                          (void)
+import qualified Data.Foldable                          as F
 import           Data.IORef
-import           Data.Maybe (fromMaybe)
-import qualified Data.Set as S
-import qualified Data.LVar.IVar as IV
-import qualified Data.Foldable as F
-import qualified Data.Traversable as T
+import qualified Data.LVar.IVar                         as IV
+import           Data.Maybe                             (fromMaybe)
+import qualified Data.Set                               as S
+import qualified Data.Traversable                       as T
 
-import           Control.LVish as LV hiding (addHandler)
-import           Control.LVish.Internal as LI
-import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                freezeLVAfter, liftIO)
+import           Control.LVish                          as LV hiding
+                                                              (addHandler)
+import           Control.LVish.Internal                 as LI
+import           Internal.Control.LVish.SchedIdempotent (freezeLV,
+                                                         freezeLVAfter, getLV,
+                                                         liftIO, newLV, putLV)
 import qualified Internal.Control.LVish.SchedIdempotent as L
 
 ------------------------------------------------------------------------------
@@ -76,7 +79,7 @@ unBitArray (BitArray lv) = lv
 
 -- | Physical identity, just as with IORefs.
 -- instance Eq (BitArray s v) where
---   BitArray lv1 == BitArray lv2 = state lv1 == state lv2 
+--   BitArray lv1 == BitArray lv2 = state lv1 == state lv2
 
 {-
 
@@ -95,7 +98,7 @@ instance LVarData1 BitArray where
 --   All entries start off as zero, which must be BOTTOM.
 newEmptyBitArray :: forall elt d s . Storable elt =>
                     Int -> Par d s (BitArray s elt)
-newEmptyBitArray len = WrapPar $ fmap (BitArray . WrapLVar) $ newLV $ do 
+newEmptyBitArray len = WrapPar $ fmap (BitArray . WrapLVar) $ newLV $ do
   let bytes = sizeOf (undefined::elt) * len
   mem <- callocBytes bytes
   fp <- newForeignPtr finalizerFree mem
@@ -114,16 +117,16 @@ newEmptyBitArray len = WrapPar $ fmap (BitArray . WrapLVar) $ newLV $ do
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
 freezeSetAfter :: BitArray s a -> (a -> QPar s ()) -> QPar s ()
 freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
-  
+
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
 withCallbacksThenFreeze :: Eq b => BitArray s a -> (a -> QPar s ()) -> QPar s b -> QPar s b
 withCallbacksThenFreeze (BitArray (WrapLVar lv)) callback action =
     do
-       hp  <- newPool 
+       hp  <- newPool
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
-       WrapPar$ 
+       WrapPar$
          freezeLVAfter lv (initCB hp res) deltCB
        -- We additionally have to quiesce here because we fork the inital set of
        -- callbacks on their own threads:
@@ -145,7 +148,7 @@ withCallbacksThenFreeze (BitArray (WrapLVar lv)) callback action =
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
 freezeSet :: BitArray s a -> QPar s (S.Set a)
-freezeSet (BitArray (WrapLVar lv)) = WrapPar $ 
+freezeSet (BitArray (WrapLVar lv)) = WrapPar $
    do freezeLV lv
       getLV lv globalThresh deltaThresh
   where
@@ -178,7 +181,7 @@ forEachHP hp (BitArray (WrapLVar lv)) callb = WrapPar $ do
 -- | Simple for-each loops over vector elements.
 forVec :: Storable a =>
           M.IOVector a -> (Int -> a -> Par d s ()) -> Par d s ()
-forVec vec fn = loop 0 
+forVec vec fn = loop 0
   where
     len = M.length vec
     loop i | i == len = return ()
@@ -194,13 +197,13 @@ forEach = forEachHP Nothing
 
 
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
--- set.     
+-- set.
 putBits :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
            Int -> elt -> BitArray s elt -> Par d s ()
 putBits !ix !elm (BitArray (WrapLVar lv)) = WrapPar$ putLV lv (putter ix)
   where putter ix vec@(M.MVector offset fptr) =
-          withForeignPtr fptr $ \ ptr -> do 
-            let offset = sizeOf (undefined::elt) * ix 
+          withForeignPtr fptr $ \ ptr -> do
+            let offset = sizeOf (undefined::elt) * ix
             orig <- B.fetchAndOr (P.plusPtr ptr offset) elm
             if orig .&. elm == 0 -- If those bits were not already set....
 --              then return (Just (ix,elm))
@@ -219,7 +222,7 @@ waitBits !elm (BitArray (WrapLVar lv)) = WrapPar $
         True  -> return (Just ())
         False -> return (Nothing)
     deltaThresh e2 | e2 == elm = return $ Just ()
-                   | otherwise  = return Nothing 
+                   | otherwise  = return Nothing
 
 -- Wait for it to contain ALL of a certain set of bits.
 -- waitBitsAnd
@@ -275,18 +278,18 @@ intersection s1 s2 = do
   forEach s1 (fn os s2)
   forEach s2 (fn os s1)
   return os
- where  
+ where
   fn outSet other@(BitArray lv) elm = do
-    -- At this point 'elm' has ALREADY been added to "us", we check "them":    
+    -- At this point 'elm' has ALREADY been added to "us", we check "them":
     peek <- LI.liftIO$ readIORef (state lv)
-    if S.member elm peek 
+    if S.member elm peek
       then putInSet elm outSet
       else return ()
 
 -- | Cartesian product of two sets.
 cartesianProd :: (Ord a, Ord b) => BitArray s a -> BitArray s b -> Par d s (BitArray s (a,b))
-cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2 
-  
+cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2
+
 -- | Takes the cartesian product of several sets.
 cartesianProds :: Ord a => [BitArray s a] -> Par d s (BitArray s [a])
 cartesianProds ls = cartesianProdsHP Nothing ls
@@ -302,14 +305,14 @@ traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> BitArray s a 
                  Par d s (BitArray s b)
 traverseSetHP mh fn set = do
   os <- newEmptySet
-  traverseSetHP_ mh fn set os  
+  traverseSetHP_ mh fn set os
   return os
 
 -- | Variant that optionally ties the handlers to a pool.
 traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> BitArray s a -> BitArray s b ->
                   Par d s ()
 traverseSetHP_ mh fn set os = do
-  forEachHP mh set $ \ x -> do 
+  forEachHP mh set $ \ x -> do
     x' <- fn x
     putInSet x' os
 
@@ -335,8 +338,8 @@ instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b) =>
       let fn :: f s0 a -> S.Set b -> QPar s0 (S.Set b)
           fn elm acc = do elm' <- deepFreeze elm
                           return (S.insert elm' acc)
-      y <- F.foldrM fn S.empty x 
-      return y      
+      y <- F.foldrM fn S.empty x
+      return y
 
  -}
 

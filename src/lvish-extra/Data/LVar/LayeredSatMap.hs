@@ -1,9 +1,9 @@
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE MagicHash           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MagicHash #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Data.LVar.LayeredSatMap
     (
@@ -22,24 +22,26 @@ module Data.LVar.LayeredSatMap
     )
     where
 
+import           Control.LVish.DeepFrz                  (runParThenFreeze)
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.DeepFrz (runParThenFreeze)
-import           Control.LVish.Internal as LI
-import           Control.LVish.Internal.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
+import           Control.LVish.Internal                 as LI
+import           Control.LVish.Internal.SchedIdempotent (freezeLV,
+                                                         freezeLVAfter, getLV,
+                                                         newLV, putLV, putLV_)
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import qualified Data.LVar.IVar as IV
-import           Data.LVar.Generic as G
-import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
-import           Data.UtilInternal (traverseWithKey_)
+import           Data.LVar.Generic                      as G
+import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
+import qualified Data.LVar.IVar                         as IV
+import           Data.UtilInternal                      (traverseWithKey_)
 
-import Control.LVish
+import           Control.LVish
 
-import Data.IORef
-import qualified Data.Map as M
-import Data.Maybe (isJust)
-import qualified Data.Foldable as F
-import           GHC.Prim (unsafeCoerce#)
-import System.IO.Unsafe (unsafeDupablePerformIO)
+import qualified Data.Foldable                          as F
+import           Data.IORef
+import qualified Data.Map                               as M
+import           Data.Maybe                             (isJust)
+import           GHC.Prim                               (unsafeCoerce#)
+import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
 data LayeredSatMap k s v where
     LayeredSatMap :: G.PartialJoinSemiLattice v => (LVar s (LSMContents k v) (k, v)) -> LayeredSatMap k s v
@@ -126,13 +128,13 @@ fromIMap lsm@(LayeredSatMap lv) = unsafeDupablePerformIO $ do
         (Nothing, _) -> return Nothing
         (Just pMap, _) -> case merge acc pMap of
           Nothing -> return Nothing
-          Just m -> flatten m ps
+          Just m  -> flatten m ps
     merge acc m = M.foldWithKey go (Just acc) m
     go _ _ Nothing = Nothing
     go k v (Just m) = case M.lookup k m of
       Nothing -> Just $ M.insert k v m
       Just old -> case joinMaybe old v of
-        Nothing -> Nothing
+        Nothing     -> Nothing
         Just newVal -> Just $ M.insert k newVal m
 
 instance (Show k, Show v, G.PartialJoinSemiLattice v, Ord k) => Show (LayeredSatMap k Frzn v) where
@@ -148,7 +150,7 @@ insert !key !elm (LayeredSatMap (WrapLVar lv)) = WrapPar $ do
     mp <- L.liftIO $ readIORef mpRef
     case mp of
       (Nothing, _) -> return ()
-      (Just _, _) -> putLV_ lv putter
+      (Just _, _)  -> putLV_ lv putter
     where
       putter (LSMContents (mpRef:mps)) = do
         (x, act) <- L.liftIO $ atomicModifyIORef' mpRef update

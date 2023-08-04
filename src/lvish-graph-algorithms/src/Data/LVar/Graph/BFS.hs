@@ -1,6 +1,6 @@
 -- | Breadth-first search algorithms in lvish
 
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP   #-}
 {-# LANGUAGE GADTs #-}
 
 module Data.LVar.Graph.BFS where
@@ -12,27 +12,27 @@ module Data.LVar.Graph.BFS where
 -- import PBBS.Timing (wait_clocks, runAndReport)
 -- calibrate, measureFreq, commaint,
 
-import Control.LVish
+import           Control.LVish
 
 -- import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
-import Data.Word
-import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Unboxed  as U
+import           Data.Word
 
-import Data.Graph.Adjacency
+import           Data.Graph.Adjacency
 
 -- define DEBUG_CHECKS
 
 #if 1
-import Data.LVar.PureSet as S
+import           Data.LVar.PureSet    as S
 #else
 -- [2013.07.09] This one still isn't terminating on 125K+
 --  Well, maybe it's just slow... 5000 takes 2 seconds.
 --  Yes, it's literally over 100 times slower currently.
-import Data.LVar.SLSet as S
+import           Data.LVar.SLSet      as S
 #endif
 
-import Data.LVar.IStructure as ISt
-import Data.LVar.NatArray as NArr
+import           Data.LVar.IStructure as ISt
+import           Data.LVar.NatArray   as NArr
 
 --------------------------------------------------------------------------------
 
@@ -52,7 +52,7 @@ bf_traverse 0 _ _ seen_rank new_rank _ = do
     ++ show (IS.size seen_rank, IS.size new_rank)
   return (IS.union seen_rank new_rank)
 
-bf_traverse k !g !l_acc !seen_rank !new_rank !f = do 
+bf_traverse k !g !l_acc !seen_rank !new_rank !f = do
   when verbose $ prnt  $"bf_traverse call... "
     ++ show k ++ " seen/new size "
     ++ show (IS.size seen_rank, IS.size new_rank)
@@ -62,19 +62,19 @@ bf_traverse k !g !l_acc !seen_rank !new_rank !f = do
   else do
     -- Add new_rank stuff to the "seen" list
     let seen_rank' = IS.union seen_rank new_rank
-        allNbr'    = IS.fold (\i acc -> IS.union (g V.! i) acc) 
+        allNbr'    = IS.fold (\i acc -> IS.union (g V.! i) acc)
                         IS.empty new_rank
-        new_rank'  = IS.difference allNbr' seen_rank' 
+        new_rank'  = IS.difference allNbr' seen_rank'
 
     -- We COULD use callbacks here, but rather we're modeling what happens in the
     -- current paper:
-    parMapM_ (\x -> fork$ do 
+    parMapM_ (\x -> fork$ do
               let elem = f x
               S.insert elem l_acc
-              when dbg $ do 
+              when dbg $ do
                  st <- unsafePeekSet l_acc
                  prnt$ " --> Called S.insert, node "++show x
-                      ++" size is "++show(Set.size st) 
+                      ++" size is "++show(Set.size st)
                       ++" elem is "++show elem --  ++" "++show st
             )
             (IS.toList new_rank') -- toList is HORRIBLE
@@ -86,21 +86,21 @@ start_traverse :: Int       -- iteration counter
                   -> WorkFn -- function to be applied to each node
                   -> IO ()
 start_traverse k !g startNode f = do
-  runParIO $ do        
+  runParIO $ do
         prnt $ " * Running on " ++ show numCapabilities ++ " parallel resources..."
-        
+
         l_acc <- newEmptySet
         -- "manually" add startNode
         fork $ S.insert (f startNode) l_acc
         -- pass in { startNode } as the initial "new" set
         set <- bf_traverse k g l_acc IS.empty (IS.singleton startNode) f
-        
+
         prnt $ " * Done with bf_traverse..."
         let size = IS.size set
-        
+
         prnt$ " * Waiting on "++show size++" set results..."
 
-        when dbg $ do 
+        when dbg $ do
           forM_ [0..size] $ \ s -> do
             prnt$ " ? Blocking on "++show s++" elements to be in the set..."
             waitForSetSize s l_acc
@@ -127,7 +127,7 @@ parMapM_ f l =
 --------------------------------------------------------------------------------
 
 bfs_async :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (ISet s NodeID)
-bfs_async gr@(AdjacencyGraph vvec evec) start = do 
+bfs_async gr@(AdjacencyGraph vvec evec) start = do
   st <- S.newFromList [start]
   S.forEach st $ \ nd -> do
     logDbgLn 1 $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
@@ -138,10 +138,10 @@ bfs_async gr@(AdjacencyGraph vvec evec) start = do
 
 -- | A version that uses an array rather than set representation.
 bfs_async_arr :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (IStructure s Bool)
-bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do 
+bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
   arr <- newIStructure (U.length vvec)
   let callback nd bool = do
-       let myNbrs = nbrs gr (fromIntegral nd)        
+       let myNbrs = nbrs gr (fromIntegral nd)
        logDbgLn 1 $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
        -- TODO: possibly use a better for loop:
        forVec myNbrs (\nbr -> ISt.put_ arr (fromIntegral nbr) True)
@@ -152,10 +152,10 @@ bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
 
 -- | Same, but with NatArray.
 bfs_async_arr2 :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (NatArray s Word8)
-bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do 
+bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
   arr <- newNatArray (U.length vvec)
   let callback nd flg = do
-       let myNbrs = nbrs gr (fromIntegral nd)        
+       let myNbrs = nbrs gr (fromIntegral nd)
        -- logDbgLn 1 $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
        forVec myNbrs (\nbr -> NArr.put arr (fromIntegral nbr) 1)
   NArr.forEach arr callback
@@ -170,7 +170,7 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.
 forVec :: U.Unbox a => U.Vector a -> (a -> Par e s ()) -> Par e s ()
-forVec vec fn = loop 0 
+forVec vec fn = loop 0
   where
     len = U.length vec
     loop i | i == len = return ()

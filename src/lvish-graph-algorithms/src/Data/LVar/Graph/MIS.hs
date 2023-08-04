@@ -1,8 +1,9 @@
 -- | Maximum independent set algorithms in lvish
 
-{-# LANGUAGE CPP, ScopedTypeVariables #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.LVar.Graph.MIS where
 
@@ -13,33 +14,33 @@ module Data.LVar.Graph.MIS where
 -- import PBBS.Timing (wait_clocks, runAndReport)
 -- calibrate, measureFreq, commaint,
 
-import Control.LVish
-import Control.Monad
-import Data.Word
-import qualified Data.Vector.Unboxed as U
-import qualified Data.Vector.Unboxed.Mutable as M
-import qualified Data.Vector.Storable as UV
+import           Control.LVish
+import           Control.Monad
+import qualified Data.Vector.Storable         as UV
 import qualified Data.Vector.Storable.Mutable as MV
+import qualified Data.Vector.Unboxed          as U
+import qualified Data.Vector.Unboxed.Mutable  as M
+import           Data.Word
 
-import Data.Graph.Adjacency
+import           Data.Graph.Adjacency
 
 #ifdef NEW_CONTAINERS
-import Control.LVish.BulkRetry
+import           Control.LVish.BulkRetry
 #endif
 
 -- define DEBUG_CHECKS
 
 #if 1
-import Data.LVar.PureSet as S
+import           Data.LVar.PureSet            as S
 #else
 -- [2013.07.09] This one still isn't terminating on 125K+
 --  Well, maybe it's just slow... 5000 takes 2 seconds.
 --  Yes, it's literally over 100 times slower currently.
-import Data.LVar.SLSet as S
+import           Data.LVar.SLSet              as S
 #endif
 
-import Data.LVar.IStructure as ISt
-import Data.LVar.NatArray as NArr
+import           Data.LVar.IStructure         as ISt
+import           Data.LVar.NatArray           as NArr
 
 ------------------------------------------------------------------------------------------
 
@@ -47,13 +48,13 @@ import Data.LVar.NatArray as NArr
 -- node sets.
 
 
-type DenseVertset s = NatArray s Word8 
+type DenseVertset s = NatArray s Word8
 
 -- type SparseVertset
 
 ------------------------------------------------------------------------------------------
 -- Maximal Independent Set
-------------------------------------------------------------------------------------------  
+------------------------------------------------------------------------------------------
 
 -- Lattice where undecided = bot, and chosen/nbrchosen are disjoint middle states
 flag_UNDECIDED :: Word8
@@ -79,9 +80,9 @@ maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
   let numVerts = U.length vvec
   flagsArr :: NatArray s Word8 <- newNatArray numVerts
-  let       
+  let
       -- Here's the loop that scans through the neighbors of a node.
-      loop !numNbrs !nbrs !selfInd !i 
+      loop !numNbrs !nbrs !selfInd !i
         | i == numNbrs = thisNodeWins
         | otherwise = do
           -- logDbgLn 3$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
@@ -99,9 +100,9 @@ maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
                 then NArr.put flagsArr selfInd' flag_NBRCHOSEN
                 else loop numNbrs nbrs selfInd (i+1)
         where
-          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >> 
+          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >>
                          NArr.put flagsArr (fromIntegral selfInd) flag_CHOSEN
-  parFor (0,numVerts) $ \ ndIx -> do 
+  parFor (0,numVerts) $ \ ndIx -> do
       let nds = nbrs gr (fromIntegral ndIx)
       -- logDbgLn 3$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
       loop (U.length nds) nds ndIx  0
@@ -114,9 +115,9 @@ maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
   let numVerts = U.length vvec
   flagsArr <- newIStructure numVerts
-  let       
+  let
       -- Here's the loop that scans through the neighbors of a node.
-      loop !numNbrs !nbrs !selfInd !i 
+      loop !numNbrs !nbrs !selfInd !i
         | i == numNbrs = thisNodeWins
         | otherwise = do
           -- logDbgLn 3$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
@@ -134,9 +135,9 @@ maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
                 then ISt.put_ flagsArr selfInd' flag_NBRCHOSEN
                 else loop numNbrs nbrs selfInd (i+1)
         where
-          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >> 
+          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >>
                          ISt.put_ flagsArr (fromIntegral selfInd) flag_CHOSEN
-  parFor (0,numVerts) $ \ ndIx -> do 
+  parFor (0,numVerts) $ \ ndIx -> do
       let nds = nbrs gr (fromIntegral ndIx)
       -- logDbgLn 3$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
       loop (U.length nds) nds ndIx  0
@@ -148,7 +149,7 @@ maximalIndependentSet3 :: AdjacencyGraph -> (U.Vector Word8)
 maximalIndependentSet3 gr@(AdjacencyGraph vvec evec) = U.create $ do
   let numVerts = U.length vvec
   flagsArr <- M.replicate numVerts 0
-  let loop !numNbrs !nbrs !selfInd !i 
+  let loop !numNbrs !nbrs !selfInd !i
         | i == numNbrs = thisNodeWins
         | otherwise = do
           let nbrInd   = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
@@ -162,7 +163,7 @@ maximalIndependentSet3 gr@(AdjacencyGraph vvec evec) = U.create $ do
                 else loop numNbrs nbrs selfInd (i+1)
         where
           thisNodeWins = M.write flagsArr (fromIntegral selfInd) flag_CHOSEN
-  for_ (0,numVerts) $ \ ndIx -> do 
+  for_ (0,numVerts) $ \ ndIx -> do
       let nds = nbrs gr (fromIntegral ndIx)
       loop (U.length nds) nds ndIx 0
   return flagsArr
@@ -172,7 +173,7 @@ maximalIndependentSet3B :: AdjacencyGraph -> (UV.Vector Word8) -> (UV.Vector Wor
 maximalIndependentSet3B gr@(AdjacencyGraph vvec evec) vec = UV.create $ do
   let numVerts = U.length vvec
   flagsArr <- MV.replicate numVerts 0
-  let loop !numNbrs !nbrs !selfInd !i 
+  let loop !numNbrs !nbrs !selfInd !i
         | i == numNbrs = thisNodeWins
         | otherwise = do
           let nbrInd   = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
@@ -186,8 +187,8 @@ maximalIndependentSet3B gr@(AdjacencyGraph vvec evec) vec = UV.create $ do
                 else loop numNbrs nbrs selfInd (i+1)
         where
           thisNodeWins = MV.write flagsArr (fromIntegral selfInd) flag_CHOSEN
-  for_ (0,numVerts) $ \ ndIx -> 
-      when (vec UV.! ndIx == 1) $ do 
+  for_ (0,numVerts) $ \ ndIx ->
+      when (vec UV.! ndIx == 1) $ do
         let nds = nbrs gr (fromIntegral ndIx)
         loop (U.length nds) nds ndIx 0
   return flagsArr
@@ -202,9 +203,9 @@ maximalIndependentSet4 gr@(AdjacencyGraph vvec evec) vertSubset = do
   -- Tradeoff: we use storage proportional to the ENTIRE graph.  If the subset is
   -- very small, this is silly and we could use a sparse representation:
   flagsArr <- newIStructure numVerts
-  let       
+  let
       -- Here's the loop that scans through the neighbors of a node.
-      loop !numNbrs !nbrs !selfInd !i 
+      loop !numNbrs !nbrs !selfInd !i
         | i == numNbrs = thisNodeWins
         | otherwise = do
           let nbrInd   = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
@@ -219,8 +220,8 @@ maximalIndependentSet4 gr@(AdjacencyGraph vvec evec) vertSubset = do
                 else loop numNbrs nbrs selfInd (i+1)
         where
           thisNodeWins = ISt.put_ flagsArr (fromIntegral selfInd) flag_CHOSEN
-          
-  NArr.forEach vertSubset $ \ ndIx _ -> 
+
+  NArr.forEach vertSubset $ \ ndIx _ ->
         let nds = nbrs gr (fromIntegral ndIx) in
         loop (U.length nds) nds ndIx  0
   return flagsArr
@@ -237,9 +238,9 @@ maximalIndependentSetBR gr@(AdjacencyGraph vvec _) = do
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
   let numVerts = U.length vvec
   flagsArr :: NatArray s Word8 <- newNatArray numVerts
-  let       
+  let
       -- Here's the loop that scans through the neighbors of a node.
-      loop retryhub !numNbrs !nbrs !selfInd !i 
+      loop retryhub !numNbrs !nbrs !selfInd !i
         | i == numNbrs = thisNodeWins
         | otherwise = do
           -- logDbgLn 3$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
@@ -258,9 +259,9 @@ maximalIndependentSetBR gr@(AdjacencyGraph vvec _) = do
                           then NArr.put flagsArr selfInd' flag_NBRCHOSEN
                           else loop retryhub numNbrs nbrs selfInd (i+1)
         where
-          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >> 
+          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >>
                          NArr.put flagsArr (fromIntegral selfInd) flag_CHOSEN
-  forSpeculative (0,numVerts) $ \ retryhub ndIx -> do 
+  forSpeculative (0,numVerts) $ \ retryhub ndIx -> do
       let nds = nbrs gr (fromIntegral ndIx)
       -- logDbgLn 3$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
       loop retryhub (U.length nds) nds ndIx  0

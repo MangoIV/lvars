@@ -33,12 +33,12 @@ module Control.LVish.Internal
   )
   where
 
+import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Control.Par.EffectSigs
 import           Data.Concurrent.Internal.MonadToss
-import qualified Control.LVish.Internal.SchedIdempotent as L
 
-import qualified Control.Par.Class        as PC
-import qualified Control.Par.Class.Unsafe as PU
+import qualified Control.Par.Class                      as PC
+import qualified Control.Par.Class.Unsafe               as PU
 
 -- | This is how we stamp Par as being legit.
 instance PU.SecretSuperClass Par where

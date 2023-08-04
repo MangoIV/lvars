@@ -1,26 +1,26 @@
-{-# LANGUAGE Unsafe #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE NamedFieldPuns, BangPatterns #-}
-{-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE CPP            #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecursiveDo    #-}
+{-# LANGUAGE Unsafe         #-}
 
 module Control.LVish.Internal.SchedUtils (
-  State(logger, no), 
+  State(logger, no),
+  DbgCfg(..),
   new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng
   ) where
 
 
-import Prelude
-import Control.Monad
-import Control.Concurrent
-import Data.IORef
-import Data.Atomics (atomicModifyIORefCAS)
+import           Control.Concurrent
+import           Control.Monad
+import           Data.Atomics                   (atomicModifyIORefCAS)
+import           Data.IORef
+import           Prelude
 -- import qualified Data.BitList as BL
 -- import System.Random (StdGen, mkStdGen)
-import System.Random.PCG.Fast.Pure (GenIO, initialize)
-import Text.Printf
+import           System.Random.PCG.Fast.Pure    (GenIO, initialize)
+import           Text.Printf
 
-import System.Log.TSLogger (DbgCfg(..))
-import qualified System.Log.TSLogger as L
+import qualified System.Log.TSLogger            as L
 
 #ifdef CHASE_LEV
 -- #warning "Compiling with Chase-Lev work-stealing deque"
@@ -31,8 +31,8 @@ type Deque a = CL.ChaseLevDeque a
 newDeque = CL.newQ
 pushMine = CL.pushL
 popMine  = CL.tryPopL
-popOther = CL.tryPopR 
-pushYield = pushMine -- for now...  
+popOther = CL.tryPopR
+pushYield = pushMine -- for now...
 nullQ = CL.nullQ
 
 #else
@@ -45,9 +45,9 @@ type Deque a = IORef [a]
 
 newDeque = newIORef []
 
-pushMine deque t = 
+pushMine deque t =
   atomicMod deque $ \ts -> (t:ts, ())
-                                   
+
 popMine deque = do
   atomicMod deque $ \ts ->
     case ts of
@@ -58,8 +58,8 @@ nullQ deque = do
   ls <- readIORef deque
   return $! null ls
 
-pushYield deque t = 
-  atomicMod deque $ \ts -> (ts++[t], ()) 
+pushYield deque t =
+  atomicMod deque $ \ts -> (ts++[t], ())
 
 popOther = popMine
 
@@ -101,17 +101,17 @@ atomicMod = atomicModifyIORefCAS
 
 -- All the state relevant to a single worker thread
 data State a s = State
-    { no       :: {-# UNPACK #-} !Int, -- ^ The number of this worker
+    { no         :: {-# UNPACK #-} !Int, -- ^ The number of this worker
       numWorkers :: !Int,               -- ^ Total number of workers in this runPar
-      prng     :: !GenIO,        -- ^ core-local random number generation
-      status   :: !(IORef s),             -- ^ A thread-local flag
-      workpool :: !(Deque a),             -- ^ The thread-local work deque
-      idle     :: !(IORef [MVar Bool]),   -- ^ global list of idle workers
-      states   :: ![State a s],         -- ^ global list of all worker states.
-      logger   :: !(Maybe L.Logger)
+      prng       :: !GenIO,        -- ^ core-local random number generation
+      status     :: !(IORef s),             -- ^ A thread-local flag
+      workpool   :: !(Deque a),             -- ^ The thread-local work deque
+      idle       :: !(IORef [MVar Bool]),   -- ^ global list of idle workers
+      states     :: ![State a s],         -- ^ global list of all worker states.
+      logger     :: !(Maybe L.Logger)
         -- ^ The Logger object used by the current Par session, if debugging is activated.
     }
-    
+
 -- | Process the next item on the work queue or, failing that, go into
 -- work-stealing mode.
 {-# INLINE next #-}
@@ -128,12 +128,12 @@ next state@State{ workpool } = do
 
 -- | Attempt to steal work or, failing that, give up and go idle (and then wake back
 -- up and keep stealing).
---     
+--
 --   This function does NOT return until the complete runPar session is complete (all
 --   workers idle).
 steal :: State a s -> IO (Maybe a)
 steal State{ idle, states, no=my_no, numWorkers, logger } = do
-  chatter logger $ "!cpu "++show my_no++" stealing" 
+  chatter logger $ "!cpu "++show my_no++" stealing"
   go states
   where
     -- After a failed sweep, go idle:
@@ -174,13 +174,20 @@ pushWork State { workpool, idle, logger, no } t = do
   idles <- readIORef idle
   when (not (null idles)) $ do
     r <- atomicMod idle (\is -> case is of
-                                 [] -> ([], return ())
+                                 []      -> ([], return ())
                                  (i:is') -> (is', putMVar i False))
     r -- wake one up
-        
+
 yieldWork :: State a s -> a -> IO ()
-yieldWork State { workpool } t = 
+yieldWork State { workpool } t =
   pushYield workpool t -- AJT: should this also wake an idle thread?
+
+data DbgCfg
+  = DbgCfg
+  { dbgDests      :: [L.OutDest]
+  , dbgRange      :: Maybe (Int, Int)
+  , dbgScheduling :: Bool
+  }
 
 -- | Create a new set of scheduler states.
 new :: DbgCfg -> Int -> s -> IO (Maybe L.Logger,[State a s])
@@ -189,10 +196,10 @@ new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
   let (minLvl, maxLvl) = case dbgRange of
                            Just b  -> b
                            Nothing -> (0,L.dbgLvl)
-  let mkLogger = do 
+  let mkLogger = do
          lgr <- L.newLogger (minLvl,maxLvl) dbgDests
-                   (if dbgScheduling 
-                    then L.WaitNum numWorkers countIdle 
+                   (if dbgScheduling
+                    then L.WaitNum numWorkers countIdle
                     else L.DontWait)
          L.logOn lgr (L.OffTheRecord 1 " [dbg-lvish] Initialized Logger... ")
          return lgr
@@ -200,10 +207,10 @@ new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
       countIdle = do ls <- readIORef idle
                      return $! length ls
   -- Fastpath: if we're not in debug mode don't create the logger at all:
-  logger <- if maxLvl > 0 
+  logger <- if maxLvl > 0
             then fmap Just $ mkLogger
             else return Nothing
-  let mkState states i = do 
+  let mkState states i = do
         workpool <- newDeque
         status   <- newIORef s
         prng     <- initialize $ fromIntegral i
@@ -220,7 +227,7 @@ setStatus State { status } s = writeIORef status s
 
 -- This is a hard-spinning busy-wait.
 await :: State a s -> (s -> Bool) -> IO ()
-await State { states, logger, no=no1 } p = 
+await State { states, logger, no=no1 } p =
   let awaitOne state@(State { status, no=no2 }) = do
         cur <- readIORef status
         unless (p cur) $ do
@@ -233,13 +240,13 @@ await State { states, logger, no=no1 } p =
 
 -- | the CPU executing the current thread (0 if not supported)
 currentCPU :: IO Int
-currentCPU = 
+currentCPU =
 #if __GLASGOW_HASKELL__ >= 701 /* 20110301 */
   --
   -- Note: GHC 7.1.20110301 is required for this to work, because that
   -- is when threadCapability was added.
   --
-      do 
+      do
         tid <- myThreadId
         (main_cpu, _) <- threadCapability tid
         return main_cpu
@@ -259,7 +266,7 @@ chatter :: Maybe L.Logger -> String -> IO ()
 -- chatter _ s = printf "%s\n" s
 -- chatter _ _ = return ()
 
-chatter mlg s = do 
-  case mlg of 
+chatter mlg s = do
+  case mlg of
     Nothing -> return ()
     Just lg -> L.logOn lg (L.OffTheRecord 7 s)

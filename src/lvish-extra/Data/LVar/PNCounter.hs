@@ -1,5 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE TypeFamilies  #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- LK: N.B. Once Data.LVar.Counter is done, we should just be able to
 -- glue two of those together for this, just as AddRemoveSet does with
@@ -26,7 +25,7 @@ module Data.LVar.PNCounter
        ) where
 import           Control.LVish
 import           Control.LVish.Internal
-import qualified Data.Atomics.Counter as AC
+import qualified Data.Atomics.Counter   as AC
 -- LK: FIXME: it can't be okay to use SchedIdempotent if we're using bump, can it?!
 -- import           Internal.Control.LVish.SchedIdempotent (newLV)
 import           Data.IORef

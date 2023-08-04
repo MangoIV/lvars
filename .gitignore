@@ -16,3 +16,4 @@ tags
 untracked_junk
 .direnv
 dist-newstyle
+.pre-commit-config.yaml

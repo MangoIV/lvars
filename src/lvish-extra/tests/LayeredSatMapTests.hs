@@ -1,25 +1,22 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds, TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
 module LayeredSatMapTests(tests, runTests, fillNFreeze) where
 
-import Data.LVar.PureSet as IS
-import qualified Data.LVar.LayeredSatMap as IM 
-  -- The common interface under test:
-  (LayeredSatMap, insert, newEmptyMap, newFromList, 
-   -- Not sure yet if we will get these:      
-   -- freezeMap, unionHP, forEach, forEachHP, traverseMap, traverseMapHP
-   )
+import qualified Data.LVar.LayeredSatMap as IM (LayeredSatMap, insert,
+                                                newEmptyMap, newFromList)
+import           Data.LVar.PureSet       as IS
 
 -- TODO: Use backpack for this when it is available:
 #include "CommonMapWriteTests.hs"
 
-type TheMap k s v = IM.LayeredSatMap k s v 
+type TheMap k s v = IM.LayeredSatMap k s v
 
 --------------------------------------------------------------------------------
 
@@ -43,6 +40,6 @@ runTests = defaultMainSeqTests [tests]
 -- show03 = show$ runParThenFreeze $ do
 --   mp <- IM.newEmptyMap
 --   IM.insert "key1" (33::Int) mp
---   IM.insert "key2" (44::Int) mp  
+--   IM.insert "key2" (44::Int) mp
 --   return mp
 

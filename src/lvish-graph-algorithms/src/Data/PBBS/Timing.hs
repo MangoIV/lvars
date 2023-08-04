@@ -1,5 +1,6 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Data.PBBS.Timing
        (runAndReport, calibrate, measureFreq, commaint,
@@ -7,26 +8,27 @@ module Data.PBBS.Timing
        where
 -- module Main where
 
-import           Control.Exception (evaluate)
-import           Control.Monad (forM_, when)
-import           Data.Word
-import           Data.IORef
-import           Data.List as L
-import           Data.List.Split (chunksOf)
-import qualified Data.IntSet as IS
+import           Control.Exception          (evaluate)
+import           Control.Monad              (forM_, when)
 import qualified Data.ByteString.Lazy.Char8 as B
-import           Data.Time.Clock (getCurrentTime, diffUTCTime, UTCTime)
-import           Text.Printf (printf)
-import           System.Mem (performGC)
-import           System.IO.Unsafe (unsafePerformIO)
-import           System.Environment (getEnvironment,getArgs)
-import           System.CPUTime.Rdtsc (rdtsc)
+import qualified Data.IntSet                as IS
+import           Data.IORef
+import           Data.List                  as L
+import           Data.List.Split            (chunksOf)
+import           Data.Time.Clock            (UTCTime, diffUTCTime,
+                                             getCurrentTime)
+import           Data.Word
+import           System.CPUTime.Rdtsc       (rdtsc)
+import           System.Environment         (getArgs, getEnvironment)
+import           System.IO.Unsafe           (unsafePerformIO)
+import           System.Mem                 (performGC)
+import           Text.Printf                (printf)
 -- import           Data.Time.Clock (getCurrentTime)
-import           System.CPUTime  (getCPUTime)
+import           System.CPUTime             (getCPUTime)
 
 -- For representing graphs
-import qualified Data.Vector as V
-import qualified Data.Vector.Mutable as MV
+import qualified Data.Vector                as V
+import qualified Data.Vector.Mutable        as MV
 
 type WorkRet = (Float)
 type WorkFn = (Node -> WorkRet)
@@ -41,33 +43,33 @@ runAndReport act =
      ----------------------------------------
      -- wait_microsecs (1000 * 100)
      act clocks_per_micro
-     ----------------------------------------     
+     ----------------------------------------
      t1 <- getCurrentTime
      putStrLn $ "SELFTIMED " ++ show (diffUTCTime t1 t0) ++ "\n"
 
      first <- readIORef first_hit
 #ifdef FIRSTHIT_RDTSC
      let first' = first - startT
-     putStrLn$"Start time in cycles: "++commaint startT      
+     putStrLn$"Start time in cycles: "++commaint startT
      putStrLn $ "First hit in raw clock cycles was " ++ commaint first'
      let nanos = ((1000 * 1000 * 1000 * (fromIntegral first')) `quot` (fromIntegral freq :: Integer))
      putStrLn $ " In nanoseconds: "++commaint nanos
-     putStrLn $ "FIRSTHIT " ++ show nanos         
-#else         
+     putStrLn $ "FIRSTHIT " ++ show nanos
+#else
 --     putStrLn$"Start time: "++show t0
 --     putStrLn $ "First hit time: " ++ show first
      putStrLn $ "FIRSTHIT " ++ show (diffUTCTime first t0)
-#endif         
+#endif
 
 
 calibrate :: IO (Double, Word64)
-calibrate = do 
+calibrate = do
   freq <- measureFreq
 --  clocks_per_kilosin <- measureSin 1000
-  let clocks_per_micro :: Rational 
+  let clocks_per_micro :: Rational
       clocks_per_micro = (fromIntegral freq) / (1000 * 1000)
 --      kilosins_per_micro = clocks_per_micro / (fromIntegral clocks_per_kilosin)
-      -- numSins :: Rational       
+      -- numSins :: Rational
       -- numSins = (fromIntegral wrk) * kilosins_per_micro * 1000
       -- numSins' = round numSins
 
@@ -81,7 +83,7 @@ calibrate = do
            (commaint freq) (commaint (round clocks_per_micro))
 
 --  printf "Time for 1K sins %s, Ksins per micro %s, numSins %s = %s\n"
---         (show clocks_per_kilosin) 
+--         (show clocks_per_kilosin)
 --         (show (fromRational kilosins_per_micro ::Double))
 --         (show numSins) (show numSins')
 
@@ -111,7 +113,7 @@ wait_clocks clocks = do
 #else
   myTime <- getCurrentTime
   atomicModifyIORef' first_hit (\ t -> (min t myTime,()))
-#endif  
+#endif
   let loop !n = do
         now <- rdtsc
         if now - myT >= clocks then return n else loop (n+1)
@@ -124,25 +126,25 @@ wait_clocks clocks = do
 measureFreq :: IO Word64 -- What units is this in? -- LK
 measureFreq = do
   let millisecond = 1000 * 1000 * 1000 -- picoseconds are annoying
-      -- Measure for how long to be sure?      
+      -- Measure for how long to be sure?
 --      measure = 200 * millisecond
-      measure = 1000 * millisecond      
+      measure = 1000 * millisecond
       scale :: Integer
       scale = 1000 * millisecond `quot` measure
-  t1 <- rdtsc 
+  t1 <- rdtsc
   start <- getCPUTime
   let loop :: Word64 -> Word64 -> IO (Word64,Word64)
-      loop !n !last = 
-       do t2 <- rdtsc 
+      loop !n !last =
+       do t2 <- rdtsc
 	  when (t2 < last) $
-	       putStrLn$ "COUNTERS WRAPPED "++ show (last,t2) 
-	  cput <- getCPUTime		
+	       putStrLn$ "COUNTERS WRAPPED "++ show (last,t2)
+	  cput <- getCPUTime
 	  if (cput - start < measure)
 	   then loop (n+1) t2
 	   else return (n,t2)
   (n,t2) <- loop 0 t1
   putStrLn$ "  Approx getCPUTime calls per second: "++ commaint (scale * fromIntegral n)
-  when (t2 < t1) $ 
+  when (t2 < t1) $
     putStrLn$ "WARNING: rdtsc not monotonically increasing, first "++show t1++" then "++show t2++" on the same OS thread"
 
   return$ fromIntegral (fromIntegral scale * (t2 - t1))
@@ -150,10 +152,10 @@ measureFreq = do
 
 -- Readable large integer printing:
 commaint :: (Show a, Integral a) => a -> String
-commaint n = 
+commaint n =
    reverse $ concat $
-   intersperse "," $ 
-   chunksOf 3 $ 
+   intersperse "," $
+   chunksOf 3 $
    reverse (show n)
 
 

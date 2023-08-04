@@ -7,21 +7,21 @@
 module CancelTests (tests, runTests)
        where
 
-import Control.LVish            (isDet, runParDetailed, runParNonDet)
-import Control.LVish            (DbgCfg (..))
-import Control.LVish.CancelT
-import Control.LVish.Internal
-import Control.Par.Class
-import Control.Par.Class.Unsafe
-import Control.Par.EffectSigs
+import           Control.LVish            (DbgCfg (..), isDet, runParDetailed,
+                                           runParNonDet)
+import           Control.LVish.CancelT
+import           Control.LVish.Internal
+import           Control.Par.Class
+import           Control.Par.Class.Unsafe
+import           Control.Par.EffectSigs
 
-import Control.Concurrent
-import Data.IORef
-import Data.List                (isInfixOf)
-import Prelude                  hiding (log)
+import           Control.Concurrent
+import           Data.IORef
+import           Data.List                (isInfixOf)
+import           Prelude                  hiding (log)
 
-import Test.Tasty
-import Test.Tasty.HUnit
+import           Test.Tasty
+import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "CancelT tests"
@@ -78,8 +78,8 @@ runDbg comp = do
                    numCap (comp logs)
   logs' <- reverse `fmap` readIORef logs
   case ans of
-    Left err  -> return $! (logs', Left (show err))
-    Right x   -> return $! (logs', Right x)
+    Left err -> return $! (logs', Left (show err))
+    Right x  -> return $! (logs', Right x)
 
 simpleLogging :: TestTree
 simpleLogging = testCase "Make sure the logger is working with Par" $ do

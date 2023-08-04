@@ -1,13 +1,14 @@
 
 
-import HSBencher
-import HSBencher.Methods
+import           HSBencher
+import           HSBencher.Methods
 
-import qualified Data.Map as M
-import System.Environment (getEnvironment)
-import System.Directory   (setCurrentDirectory, getDirectoryContents, getCurrentDirectory)
-import System.IO.Unsafe   (unsafePerformIO)
-import GHC.Conc           (getNumProcessors)
+import qualified Data.Map           as M
+import           GHC.Conc           (getNumProcessors)
+import           System.Directory   (getCurrentDirectory, getDirectoryContents,
+                                     setCurrentDirectory)
+import           System.Environment (getEnvironment)
+import           System.IO.Unsafe   (unsafePerformIO)
 
 --------------------------------------------------------------------------------
 
@@ -18,10 +19,10 @@ cfaArgs = [ "-t blur1",
             "-t blurN_5",
             "-t blurN_6",
             "-t blurN_7",
-            "-t blurN_8", 
+            "-t blurN_8",
             "-t notChain300" ]
 
-benches = 
+benches =
   [ Benchmark "cfa/0CFA_lvish.hs" (words args)
     (And [withthreads, Or [none,
                            Set (Variant "inplace_lockfree") (CompileParam "-DINPLACE -DLOCKFREE"),
@@ -42,8 +43,8 @@ benches =
             -- , "bfsN  grid 1000" ++ scale
               "bfsN  rmat 600" ++ scale
             -- , "bfsN  rand 1000" ++ scale
-              
-            -- , "misN3 grid 500" ++ scale 
+
+            -- , "misN3 grid 500" ++ scale
             -- , "misI3 grid 2000" ++ scale
             , "misI3 rmat 2000" ++ scale
             -- , "misI3 rand 2000" ++ scale
@@ -51,12 +52,12 @@ benches =
             -- , "bfsN_misI grid 500" ++ scale
             -- , "bfsN_misI rmat 500" ++ scale
             -- , "bfsN_misI rand 500" ++ scale
-              
+
             -- , "bfsN_misI_deg grid 500" ++ scale
             -- , "bfsN_misI_deg rmat 500" ++ scale
             -- , "bfsN_misI_deg rand 500" ++ scale
             ] ++
-            [ bench++" "++topo++" "++ show verts ++" "++ show wrk              
+            [ bench++" "++topo++" "++ show verts ++" "++ show wrk
             | bench <- ["bfsN_misI_work", "bfsN_barrier_misI_work"]++
                        ["misI_work", "misI_barrier_work"]++
                        ["bfsN_work", "bfsN_barrier_work"]
@@ -139,7 +140,7 @@ threadSelection = unsafePerformIO $ do
 --            ]
 --      ]
 
-Just threader = setThreads ghcMethod 
+Just threader = setThreads ghcMethod
 
 theEnv = unsafePerformIO $ getEnvironment
 

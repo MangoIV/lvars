@@ -2,12 +2,12 @@
 
 module Data.LVar.Graph.MSF where
 
-import Control.Monad
-import Control.LVish
-import qualified Data.LVar.SLMap as SLM
+import           Control.LVish
+import           Control.Monad
+import           Data.Graph.Adjacency as Adj
 import qualified Data.LVar.IStructure as IS
-import Data.Graph.Adjacency as Adj
-import qualified Data.Vector.Unboxed as U
+import qualified Data.LVar.SLMap      as SLM
+import qualified Data.Vector.Unboxed  as U
 
 --- A NodeInfo is a 2-element array. First element is parentID, second element is rank
 --- Taking advantage of the fact that: type of parentID = Adj.NodeID = Int = type of rank
@@ -23,7 +23,7 @@ rank info = IS.get info 1
 type DisjointSet s = SLM.IMap Int s (NodeInfo s)
 
 make_set :: NodeID -> Par e s (NodeInfo s)
-make_set nd = do 
+make_set nd = do
   ni <- IS.newIStructure 2
   IS.put ni 0 nd >> return ni
 
@@ -35,14 +35,14 @@ union ds x y = do
   [px,py] <- mapM (find_set ds) [x,y]
   rankPx <- SLM.getKey px ds >>= rank
   rankPy <- SLM.getKey py ds >>= rank
-  if rankPx > rankPy 
+  if rankPx > rankPy
     then SLM.modify ds py (make_set py) $ update_parent px
     else SLM.modify ds px (make_set px) $ update_parent py
   when (rankPx == rankPy) $ do
        SLM.modify ds py (make_set py) $ update_rank (rankPy + 1)
        return ()
   return ()
-                 
+
 
 -- Implements path compression
 

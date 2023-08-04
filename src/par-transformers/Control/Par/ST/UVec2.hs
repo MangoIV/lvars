@@ -1,15 +1,14 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
 
 -- | A convenience interface -- simply a restriction of `ParST` to the case
 --   of a single, boxed vector as the mutable state.
@@ -39,12 +38,12 @@ module Control.Par.ST.UVec2
        )
        where
 
-import Control.Par.ST hiding (reify)
-import Control.Par.Class.Unsafe (ParThreadSafe)
-import qualified Control.Monad.Reader as R
+import qualified Control.Monad.Reader        as R
+import           Control.Par.Class.Unsafe    (ParThreadSafe)
+import           Control.Par.ST              hiding (reify)
 --import qualified Control.Monad.State.Strict as S
 import qualified Data.Vector.Unboxed.Mutable as MU
-import Prelude hiding (read, length, drop, take)
+import           Prelude                     hiding (drop, length, read, take)
 
 #define CONSTRAINT  MU.Unbox
 #define FLIPTY UVectorFlp

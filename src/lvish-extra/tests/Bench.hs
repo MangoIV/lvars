@@ -1,34 +1,36 @@
-{-# LANGUAGE RankNTypes, BangPatterns, DataKinds #-}
-{-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE BangPatterns         #-}
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE ImpredicativeTypes   #-}
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE RankNTypes           #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
 
 
-import Control.LVish hiding (for_)
-import qualified Control.LVish.Internal as L
-import Control.LVish.DeepFrz (runParThenFreeze, NonFrzn)
-import Control.Par.EffectSigs
-import Data.LVar.Generic (PartialJoinSemiLattice(..))
+import           Control.LVish           hiding (for_)
+import           Control.LVish.DeepFrz   (NonFrzn, runParThenFreeze)
+import qualified Control.LVish.Internal  as L
+import           Control.Par.EffectSigs
+import           Data.LVar.Generic       (PartialJoinSemiLattice (..))
 -- import Data.LVar.IVar
-import qualified Data.LVar.PureSet as PS
+import qualified Data.LVar.PureSet       as PS
 --import qualified Data.LVar.SLSet   as SS
-import qualified Data.Set          as Set
-import qualified Data.Map          as M
-    
+import qualified Data.Map                as M
+import qualified Data.Set                as Set
+
 --import qualified Data.LVar.PureMap as PM
 --import qualified Data.LVar.SLMap   as SM
 
-import qualified Data.LVar.SatMap  as Sat
 import qualified Data.LVar.LayeredSatMap as LSM
-    
-import qualified Data.LVar.FiltSet as FS
+import qualified Data.LVar.SatMap        as Sat
 
-import Data.Atomics.Counter
-import Criterion.Main
-import Criterion.Types
-import GHC.Conc(numCapabilities)
+import qualified Data.LVar.FiltSet       as FS
+
+import           Criterion.Main
+import           Criterion.Types
+import           Data.Atomics.Counter
+import           GHC.Conc                (numCapabilities)
 
 -- data IntPar = forall s . IntPar (Par Det s Int)
 data IntPar = IntPar (forall s . Par Det s Int)
@@ -38,7 +40,7 @@ whnf' = whnf
 
 runIntPar :: IntPar -> Int
 runIntPar (IntPar p) = runPar p
-        
+
 main :: IO ()
 main = defaultMain $
        -- insideOut  -- OPTIONALLY do this... it can make them easier to view in the report.
@@ -84,10 +86,10 @@ insideOut allbs = [ BenchGroup k bs
         [ (n2,[Benchmark n1 b])
         | BenchGroup n1 ls <- allbs
         , Benchmark n2 b <- ls ]
-            
+
 type Det = Ef P G NF B NI
-type Full = Ef P G F B I 
-    
+type Full = Ef P G F B I
+
 basicContainerBench :: (forall s . Par Full s (c s Int))
                     -> (forall s . Int -> c s Int -> Par Full s ())
                     -> (forall s . [Int] -> Par Full s (c s Int))
@@ -118,7 +120,7 @@ copyContainerBench :: (forall s . Par Full s (c s Int))
                     -> (forall s. c s Int -> Par Full s (c s Int))
                     -> [Benchmark]
 copyContainerBench mknew insert frmList copy =
-  basicContainerBench mknew insert frmList ++ 
+  basicContainerBench mknew insert frmList ++
    [ bench "fillCopy10x10" $ benchPar (do let copyLoop 0 _ = return ()
                                               copyLoop n s = do s' <- copy s
                                                                 for_ 1 10 (\i -> insert (n*100+i) s')
@@ -152,7 +154,7 @@ filtSetBench = [
      s <- FS.newEmptySet
      for_ 1 (fromIntegral num) $ \n -> do
        m <- LSM.newMap $ M.fromList [(n, n)]
-       FS.insert m s 
+       FS.insert m s
   ]
 
 newtype SatTuple k s v = SatTuple (Int, Sat.SatMap k s v)
@@ -195,10 +197,10 @@ filtSetSatBench = bench "filtSetSatBench" $ Benchmarkable $ \num -> runParNonDet
   return ()
 
 ----------------------------------------------------------------------------------------------------
-  
+
 -- | Helper for benchmarking par-monad actions:
 benchPar :: (forall s . Par Full s ()) -> Benchmarkable
-benchPar par = Benchmarkable $ \ iters -> 
+benchPar par = Benchmarkable $ \ iters ->
   runParNonDet $ rep (fromIntegral iters) par
 {-# INLINE benchPar #-}
 

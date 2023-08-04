@@ -4,21 +4,21 @@
 
 module Main where
 
-import Test.Tasty (TestTree, testGroup, defaultMain)
+import           Test.Tasty        (TestTree, defaultMain, testGroup)
 
-import qualified MemoTests
 import qualified ArrayTests
+import qualified MemoTests
 import qualified SatMapTests
 --import qualified LayeredSatMapTests
-import qualified MaxPosIntTests
 import qualified AddRemoveSetTests
+import qualified MaxPosIntTests
 
 main :: IO ()
 main = defaultMain alltests
 
 --alltests :: [TestTree]
 alltests :: TestTree
-alltests = testGroup "allTests" 
+alltests = testGroup "allTests"
        [ ArrayTests.tests
        , MemoTests.tests
        , MaxPosIntTests.tests

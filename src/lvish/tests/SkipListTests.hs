@@ -1,35 +1,39 @@
-{-# LANGUAGE TemplateHaskell, CPP, ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 
 -- | Tests for SNZI data structure.
 module SkipListTests where
 
-import Test.Tasty.HUnit 
-import Test.Tasty (TestTree, defaultMain, testGroup)
+import           Test.Tasty                             (TestTree, defaultMain,
+                                                         testGroup)
+import           Test.Tasty.HUnit
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
-import Test.Tasty.TH (testGroupGenerator)
+import           Test.Tasty.TH                          (testGroupGenerator)
 
 --import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Control.Monad
-import Control.Concurrent
-import GHC.Conc
+import           Control.Concurrent
+import           Control.Monad
+import           GHC.Conc
 
-import Data.Word
-import Data.IORef
-import System.Random (random, mkStdGen)
-import Control.LVish.Internal.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import           Control.LVish.Internal.SchedIdempotent (dbgLvl,
+                                                         forkWithExceptions,
+                                                         liftIO)
+import           Data.IORef
+import           Data.Word
+import           System.Random                          (mkStdGen, random)
 -- import Control.LVish  (logDbgLn_)
-import qualified Data.Concurrent.LinkedMap as LM
-import qualified Data.Concurrent.SkipListMap as SLM
+import qualified Data.Concurrent.LinkedMap              as LM
+import qualified Data.Concurrent.SkipListMap            as SLM
 
-import Debug.Trace
+import           Debug.Trace
 
-import TestHelpers as T
+import           TestHelpers                            as T
 
 -- FIXME: need an efficient way to extract the logger and capture it in the callbacks:
 logDbgLn_ _ _ = return ()
@@ -41,9 +45,9 @@ logDbgLn_ _ _ = return ()
 -- A number of insertions to test that is reasonable.
 mediumSize :: Int
 mediumSize =
-  trace ("Setting size for SkipListTests to "++show x) x 
+  trace ("Setting size for SkipListTests to "++show x) x
   where x = case numElems of
-               Just x -> x
+               Just x  -> x
                Nothing -> 1000
 
 expectedSum :: Word64
@@ -52,10 +56,10 @@ expectedSum = (s * (s + 1)) `quot` 2
 
 -- | An additional check to apply to any SLMs we generate.
 sliceCheck :: (Ord k, Show k, Show v) => SLM.SLMap k v -> IO ()
-sliceCheck slm = do 
+sliceCheck slm = do
   let sl1 = SLM.toSlice slm
   sz1 <- SLM.sliceSize sl1
-  Just (sl2,sl3) <- SLM.splitSlice sl1    
+  Just (sl2,sl3) <- SLM.splitSlice sl1
   dbg1 <- SLM.debugShow sl2
   dbg2 <- SLM.debugShow sl3
   sz2 <- SLM.sliceSize sl2
@@ -63,7 +67,7 @@ sliceCheck slm = do
   logDbgLn_ 5 $ "HALF 1, sz "++ show sz2++":\n"++dbg1
   logDbgLn_ 5 $ "HALF 2, sz "++ show sz3++":\n"++dbg2
   assertEqual "Splitting conserved size: " sz1 (sz2 + sz3)
-  return () 
+  return ()
 
 --------------------------------------------------------------------------------
 -- Tests for basic linked maps
@@ -78,8 +82,8 @@ lm1 = do
   LM.tryInsert tok " World"
   LM.Found s1 <- LM.find lm 1
   LM.Found s0 <- LM.find lm 0
-  return $ s1 ++ s0  
-case_lm1 :: Assertion  
+  return $ s1 ++ s0
+case_lm1 :: Assertion
 case_lm1 = lm1 >>= assertEqual "test sequential insertion for LinkedMap" "Hello World"
 
 halveTest :: (Show k, Show v, Ord k, Eq v) => Maybe k -> [(k,v)] -> IO ()
@@ -87,10 +91,10 @@ halveTest mend ls = do
   lm  <- LM.fromList ls
   res <- LM.halve' mend lm
   let capit = case mend of
-                Nothing -> id
+                Nothing  -> id
                 Just end -> filter ((< end) . fst)
       ls' = capit ls
---  printLog                
+--  printLog
   case res of
     Nothing -> assertBool "un-halvable things should be size 0 or 1" (length ls' <= 1)
     Just (l,r) -> do
@@ -131,9 +135,9 @@ slm1 = do
   logDbgLn_ 1 dbg
   -- printLog
   return $ s0 ++ s1
-  
-case_slm1 :: Assertion  
-case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "Hello World"  
+
+case_slm1 :: Assertion
+case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "Hello World"
 
 -- | Perform a fork-join computation and populate a SkipListMap in parallel.
 fillOne :: [(Int, Int)] -> IO (SLM.SLMap Int Int)
@@ -150,17 +154,17 @@ fillOne chunks = do
             return b
       T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
       putMVar mv ()
-    return mv  
-  forM_ mvars takeMVar  
+    return mv
+  forM_ mvars takeMVar
   return slm
 
 insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
 insertionTest chunks = do
-  slm <- timeit$ fillOne chunks 
+  slm <- timeit$ fillOne chunks
   -- End timing.  Timing just the insertion phase.
   cs <- SLM.counts slm
   logDbgLn_ 1 $ "After insertions, counts: " ++ show cs
-  sliceCheck slm    
+  sliceCheck slm
   matches <- SLM.foldlWithKey id (\b k v -> if k == v then return b else return False) True slm
   summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
 --  printLog
@@ -171,14 +175,14 @@ insertionTest chunks = do
 -- Concurrent insertion of the same values:
 slm2 :: IO (Bool, Word64)
 slm2 = insertionTest (replicate numCapabilities (1,mediumSize))
-case_slm2 :: Assertion  
+case_slm2 :: Assertion
 case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap (#2)" (True, expectedSum)
 
 -- Same, but in the opposite order:
 -- Takes much longer (in parallel)!! Why?
 slm3 :: IO (Bool, Word64)
 slm3 = insertionTest (replicate numCapabilities (mediumSize,1))
-case_slm3 :: Assertion 
+case_slm3 :: Assertion
 case_slm3 = slm3 >>= assertEqual "test concurrent insertion for SkipListMap (#3)" (True, expectedSum)
 -- Aaron doesn't know anything about the algorithm that would be biased on insertion order.
 -- Theories: Perhaps this is distributing failure across different threads in a more uniform way?
@@ -192,7 +196,7 @@ case_slm3 = slm3 >>= assertEqual "test concurrent insertion for SkipListMap (#3)
 
 slm4 :: IO (Bool, Word64)
 slm4 = insertionTest (splitRange numCapabilities (1,mediumSize))
-case_slm4 :: Assertion 
+case_slm4 :: Assertion
 case_slm4 = slm4 >>= assertEqual "test concurrent insertion for SkipListMap (#4)" (True, expectedSum)
 
 
@@ -243,5 +247,5 @@ when it goes wrong, varies wildly:
     test concurrent insertion for SkipListMap
     expected: (True,50005000)
      but got: (True,141778)
- 
+
 -}

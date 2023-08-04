@@ -1,22 +1,23 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds, TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
 module SLMapTests(tests, runTests) where
 
-import qualified Data.LVar.SLSet as IS
-import qualified Data.LVar.SLMap as IM
 import qualified Data.Concurrent.SkipListMap as SLM
+import qualified Data.LVar.SLMap             as IM
+import qualified Data.LVar.SLSet             as IS
 
-import qualified Data.LVar.SLMap as SM
+import qualified Data.LVar.SLMap             as SM
 
 #include "CommonMapTests.hs"
 
-type TheMap k s v = IM.IMap k s v 
+type TheMap k s v = IM.IMap k s v
 
 --------------------------------------------------------------------------------
 
@@ -40,7 +41,7 @@ show02 :: String
 show02 = show$ runParThenFreeze $ isDet $ do
   mp <- IM.newEmptyMap
   SM.insert "key1" (33::Int) mp
-  SM.insert "key2" (44::Int) mp  
+  SM.insert "key2" (44::Int) mp
   return mp
 
 --------------------------------------------------------------------------------
@@ -58,7 +59,7 @@ show02 = show$ runParThenFreeze $ isDet $ do
 --     logDbgLn 1 $ "[case_handlrDup] Callback executing: " ++ show (k,v)
 --     I.liftIO $ incr ctr
 --   SM.insert 2 2 mp
---   SM.insert 3 3 mp 
+--   SM.insert 3 3 mp
 --   quiesce hp
 --   sum <- I.liftIO $ readIORef ctr
 --   I.liftIO $ assertEqual "Should be no duplication in this case" 2 sum

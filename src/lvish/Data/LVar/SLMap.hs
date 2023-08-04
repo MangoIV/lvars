@@ -62,6 +62,9 @@ import           Control.Exception                      (throw)
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal                 as LI
+import           Control.LVish.Internal.SchedIdempotent (freezeLV, getLV, newLV,
+                                                         putLV, putLV_)
+import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Control.Monad
 import           Data.Concurrent.SkipListMap            as SLM
 import qualified Data.Foldable                          as F
@@ -71,17 +74,14 @@ import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
 import qualified Data.LVar.IVar                         as IV
 import qualified Data.Map.Strict                        as M
 import           Data.UtilInternal                      (traverseWithKey_)
-import           GHC.Prim                               (unsafeCoerce#)
-import           Control.LVish.Internal.SchedIdempotent (freezeLV, getLV, newLV,
-                                                         putLV, putLV_)
-import qualified Control.LVish.Internal.SchedIdempotent as L
+import           GHC.Exts                               (unsafeCoerce#)
 import           Prelude
 import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
-import           Control.LVish.Internal.Unsafe     ()
-import qualified Control.Par.Class        as PC
-import           Control.Par.Class.Unsafe (internalLiftIO)
-import           Data.Par.Splittable      (mkMapReduce)
+import           Control.LVish.Internal.Unsafe          ()
+import qualified Control.Par.Class                      as PC
+import           Control.Par.Class.Unsafe               (internalLiftIO)
+import           Data.Par.Splittable                    (mkMapReduce)
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
@@ -123,7 +123,7 @@ instance LVarData1 (IMap k) where
         unWrapPar $ do
           SLM.foldlWithKey LI.liftIO
              (\() _k v -> forkHP mh $ callb v) () slm
-          LI.liftIO unlockMap 
+          LI.liftIO unlockMap
 
 -- | The `IMap`s in this module also have the special property that they support an
 -- /O(1)/ freeze operation which immediately yields a `Foldable` container

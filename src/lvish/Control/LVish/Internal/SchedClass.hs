@@ -1,17 +1,20 @@
-{-# LANGUAGE DataKinds, KindSignatures, FlexibleInstances #-}
-{-# LANGUAGE CPP, NamedFieldPuns #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures    #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 
 
 module Control.LVish.Internal.SchedClass where
 
-import Control.Monad
-import Control.LVish.SchedIdempotent
+import           Control.LVish.SchedIdempotent
+import           Control.Monad
 -- import Control.LVish.SchedIdempotentInternal
 import qualified Control.LVish.SchedIdempotentInternal as Sched
-import Data.IORef
-import Data.Atomics
+import           Data.Atomics
+import           Data.IORef
 
-import qualified Data.Concurrent.Bag as B
+import qualified Data.Concurrent.Bag                   as B
 
 --------------------------------------------------------------------------------
 
@@ -22,8 +25,8 @@ newtype Par2 (idp :: Idempotency) a = Par2 (Par a)
 
 -- | This exists solely to choose between idempotent and non-idempotent
 -- configurations of the `Par` monad.
-class WorkSched par where 
-  getLV :: (LVar a d)                  -- ^ the LVar 
+class WorkSched par where
+  getLV :: (LVar a d)                  -- ^ the LVar
         -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
         -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
         -> par b
@@ -40,7 +43,7 @@ class WorkSched par where
 instance WorkSched (Par2 Idemp) where
   getLV = mkGetLV Idemp
 
-instance WorkSched (Par2 NonIdemp) where  
+instance WorkSched (Par2 NonIdemp) where
   getLV = mkGetLV NonIdemp
 
 -- ARGH: everything overloaded on these two should have a SPECIALIZE pragma for both.
@@ -60,40 +63,40 @@ mkGetLV mode lv@(LVar {state, status}) globalThresh deltaThresh = Par2$
 
     curStatus <- readIORef status
     case curStatus of
-      Frozen -> do 
+      Frozen -> do
         tripped <- globalThresh state True
         case tripped of
-          Just b -> exec (k b) q -- already past the threshold; invoke the
-                                 -- continuation immediately                    
-          Nothing -> sched q     
+          Just b  -> exec (k b) q -- already past the threshold; invoke the
+                                 -- continuation immediately
+          Nothing -> sched q
       Active listeners -> do
         tripped <- globalThresh state False
         case tripped of
           Just b -> exec (k b) q -- already past the threshold; invoke the
-                                 -- continuation immediately        
+                                 -- continuation immediately
 
-          Nothing -> do          -- /transiently/ not past the threshhold; block        
+          Nothing -> do          -- /transiently/ not past the threshhold; block
             let unblockWhen1 thresh tok q = do
                   tripped <- thresh
-                  whenJust tripped $ \b -> do        
+                  whenJust tripped $ \b -> do
                     B.remove tok
                     Sched.pushWork q (k b)
                 -- Non-idempotent version.  A small amount of duplicated code here:
                 unblockWhen2 execFlag thresh tok q = do
                   tripped <- thresh
-                  whenJust tripped $ \b -> do        
+                  whenJust tripped $ \b -> do
                     B.remove tok
                     ticket <- readForCAS execFlag
                     unless (peekTicket ticket) $ do
                       (winner, _) <- casIORef execFlag ticket True
-                      when winner $ Sched.pushWork q (k b) 
-                    
+                      when winner $ Sched.pushWork q (k b)
+
             mflg <- case mode of
                      Idemp    -> return (error "getLV: This value should be unused")
                      NonIdemp -> newIORef False
-                    
+
             let unblock = case mode of
-                           Idemp    -> unblockWhen1 
+                           Idemp    -> unblockWhen1
                            NonIdemp -> unblockWhen2 mflg
                 onUpdate d = unblock $ deltaThresh d
                 onFreeze   = unblock $ globalThresh state True
@@ -116,7 +119,7 @@ mkGetLV mode lv@(LVar {state, status}) globalThresh deltaThresh = Par2$
 
 
 
--- getLV :: (LVar a d)                  -- ^ the LVar 
+-- getLV :: (LVar a d)                  -- ^ the LVar
 --       -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
 --       -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
 --       -> Par b
@@ -130,40 +133,40 @@ mkGetLV mode lv@(LVar {state, status}) globalThresh deltaThresh = Par2$
 
 --   curStatus <- readIORef status
 --   case curStatus of
---     Frozen -> do 
+--     Frozen -> do
 --       tripped <- globalThresh state True
 --       case tripped of
 --         Just b -> exec (k b) q -- already past the threshold; invoke the
---                                -- continuation immediately                    
---         Nothing -> sched q     
+--                                -- continuation immediately
+--         Nothing -> sched q
 --     Active listeners -> do
 --       tripped <- globalThresh state False
 --       case tripped of
 --         Just b -> exec (k b) q -- already past the threshold; invoke the
---                                -- continuation immediately        
+--                                -- continuation immediately
 
---         Nothing -> do          -- /transiently/ not past the threshhold; block        
-          
+--         Nothing -> do          -- /transiently/ not past the threshhold; block
+
 -- #if GET_ONCE
 --           execFlag <- newIORef False
 -- #endif
-  
+
 --           let onUpdate d = unblockWhen $ deltaThresh d
 --               onFreeze   = unblockWhen $ globalThresh state True
-              
+
 --               unblockWhen thresh tok q = do
 --                 tripped <- thresh
---                 whenJust tripped $ \b -> do        
+--                 whenJust tripped $ \b -> do
 --                   B.remove tok
 -- #if GET_ONCE
 --                   ticket <- readForCAS execFlag
 --                   unless (peekTicket ticket) $ do
 --                     (winner, _) <- casIORef execFlag ticket True
---                     when winner $ Sched.pushWork q (k b) 
--- #else 
---                   Sched.pushWork q (k b)                     
+--                     when winner $ Sched.pushWork q (k b)
+-- #else
+--                   Sched.pushWork q (k b)
 -- #endif
-          
+
 --           -- add listener, i.e., move the continuation to the waiting bag
 --           tok <- B.put listeners $ Listener onUpdate onFreeze
 

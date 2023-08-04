@@ -1,16 +1,16 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE Trustworthy           #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 {-|
 
@@ -49,7 +49,7 @@ module Data.LVar.NatArray
 
          -- -- * Higher-level derived operations
          -- copy, traverseSet, traverseSet_, union, intersection,
-         -- cartesianProd, cartesianProds, 
+         -- cartesianProd, cartesianProds,
 
          -- -- * Alternate versions of derived ops that expose HandlerPools they create.
          -- forEachHP, traverseSetHP, traverseSetHP_,
@@ -60,36 +60,40 @@ module Data.LVar.NatArray
 -- import qualified Data.Vector.Unboxed.Mutable as M
 
 
-import Data.LVar.NatArray.Unsafe
+import           Data.LVar.NatArray.Unsafe
 
-import qualified Data.Vector.Storable as U
-import qualified Data.Vector.Storable.Mutable as M
-import Foreign.Marshal.MissingAlloc (callocBytes)
-import Foreign.Marshal.Alloc (finalizerFree)
-import Foreign.Storable (sizeOf, Storable)
-import Foreign.ForeignPtr (newForeignPtr, withForeignPtr)
-import qualified Foreign.Ptr as P
-import qualified Data.Bits.Atomic as B
-import Data.Bits ((.&.))
+import           Data.Bits                              ((.&.))
+import qualified Data.Bits.Atomic                       as B
+import qualified Data.Vector.Storable                   as U
+import qualified Data.Vector.Storable.Mutable           as M
+import           Foreign.ForeignPtr                     (newForeignPtr,
+                                                         withForeignPtr)
+import           Foreign.Marshal.Alloc                  (finalizerFree)
+import           Foreign.Marshal.MissingAlloc           (callocBytes)
+import qualified Foreign.Ptr                            as P
+import           Foreign.Storable                       (Storable, sizeOf)
 
-import           Control.Monad (void)
-import           Control.Exception (throw)
+import           Control.Exception                      (throw)
+import           Control.Monad                          (void)
+import qualified Data.Foldable                          as F
 import           Data.IORef
-import           Data.Maybe (fromMaybe)
-import qualified Data.Set as S
-import qualified Data.LVar.IVar as IV
-import qualified Data.Foldable as F
-import qualified Data.Traversable as T
 import           Data.LVar.Generic
+import qualified Data.LVar.IVar                         as IV
+import           Data.Maybe                             (fromMaybe)
+import qualified Data.Set                               as S
+import qualified Data.Traversable                       as T
 
-import           Control.LVish as LV hiding (addHandler, put,get)
-import           Control.LVish.DeepFrz.Internal  as DF
-import           Control.LVish.Internal as LI
-import           Control.LVish.Internal.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                freezeLVAfter, liftIO)
+import           Control.LVish                          as LV hiding
+                                                              (addHandler, get,
+                                                               put)
+import           Control.LVish.DeepFrz.Internal         as DF
+import           Control.LVish.Internal                 as LI
+import           Control.LVish.Internal.SchedIdempotent (freezeLV,
+                                                         freezeLVAfter, getLV,
+                                                         liftIO, newLV, putLV)
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import           System.IO.Unsafe (unsafeDupablePerformIO)
-import           Data.LVar.NatArray.Unsafe (NatArray(..))
+import           Data.LVar.NatArray.Unsafe              (NatArray (..))
+import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
 ------------------------------------------------------------------------------
 -- Toggles
@@ -103,7 +107,7 @@ unNatArray (NatArray lv) = lv
 
 -- | Physical identity, just as with IORefs.
 -- instance Eq (NatArray s v) where
---   NatArray lv1 == NatArray lv2 = state lv1 == state lv2 
+--   NatArray lv1 == NatArray lv2 = state lv1 == state lv2
 
 -- | Create a new, empty, monotonically growing 'NatArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
@@ -123,7 +127,7 @@ newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 -- the array data.
 freezeNatArray :: (HasFreeze e, Storable a) => NatArray s a -> LV.Par e s (U.Vector a)
 freezeNatArray (NatArray lv) = do
---  freezeLV 
+--  freezeLV
 --  U.unsafeFreeze (state lv))
   error "FINISHME -- freezeNatArray "
   -- LI.liftIO $ U.unsafeFreeze (LI.state lv)
@@ -170,14 +174,14 @@ forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
         -- FIXME: When it starts off, it is SPARSE... there must be a good way to
         -- avoid testing each position for zero.
         if elm == 0
-        then return ()                
+        then return ()
         else forkHP hp $ callb ix elm
 
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.
 forVec :: Storable a =>
           M.IOVector a -> (Int -> a -> Par e s ()) -> Par e s ()
-forVec vec fn = loop 0 
+forVec vec fn = loop 0
   where
     len = M.length vec
     loop i | i == len = return ()
@@ -201,10 +205,10 @@ put :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt, Show elt, HasP
 put _ !ix 0 = throw (LVarSpecificExn$ "NatArray: violation!  Attempt to put zero to index: "++show ix)
 put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
   where putter ix vec@(M.MVector _len fptr) =
-          withForeignPtr fptr $ \ ptr -> do 
+          withForeignPtr fptr $ \ ptr -> do
             let offset = sizeOf (undefined::elt) * ix
             -- ARG, if it weren't for the idempotency requirement we could use fetchAndAdd here:
-            -- orig <- B.fetchAndAdd (P.plusPtr ptr offset) elm                          
+            -- orig <- B.fetchAndAdd (P.plusPtr ptr offset) elm
             orig <- B.compareAndSwap (P.plusPtr ptr offset) 0 elm
             case orig of
               0 -> return (Just (ix, elm))
@@ -214,7 +218,7 @@ put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
 
 {-# INLINE get #-}
 -- | Wait for an indexed entry to contain a non-zero value.
--- 
+--
 -- Warning: this is inefficient if it needs to block, because the deltaThresh must
 -- monitor EVERY new addition.
 get :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt, HasGet e) =>
@@ -222,15 +226,15 @@ get :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt, HasGet e) =>
 get (NatArray (WrapLVar lv)) !ix  = WrapPar $
     getLV lv globalThresh deltaThresh
   where
-    globalThresh ref _frzn = do      
-      elm <- M.read ref ix 
+    globalThresh ref _frzn = do
+      elm <- M.read ref ix
       if elm == 0
         then return Nothing
         else return (Just elm)
     -- FIXME: we don't actually want to call the deltaThresh on every element...
       -- We want more locality than that...
     deltaThresh (ix2,e2) | ix == ix2 = return$! Just e2
-                         | otherwise = return Nothing 
+                         | otherwise = return Nothing
 
 
 -- | A sequential for-loop with a catch.  The body of the loop gets access to a
@@ -251,8 +255,8 @@ seqLoopNonblocking start end fn = do
 -- forkHP mh child = mkPar $ \k q -> do
 --   closed <- closeInPool mh child
 --   Sched.pushWork q (k ()) -- "Work-first" policy.
--- --  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
---   exec closed q  
+-- --  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp
+--   exec closed q
       undefined
 
 {-

@@ -1,9 +1,10 @@
-{-# LANGUAGE Unsafe #-}
+{-# LANGUAGE Unsafe              #-}
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE TypeFamilies        #-}
 
-{-# LANGUAGE ScopedTypeVariables, ConstraintKinds  #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.LVar.PureMap.Unsafe
        (
@@ -16,24 +17,24 @@ module Data.LVar.PureMap.Unsafe
        )
        where
 
+import           Control.LVish                          hiding (parIO)
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish hiding (parIO)
-import           Control.LVish.Internal as LI
+import           Control.LVish.Internal                 as LI
 import           Control.LVish.Internal.SchedIdempotent (freezeLV)
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import           Data.LVar.Generic as G
-import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
-import           Data.UtilInternal (traverseWithKey_)
+import           Data.LVar.Generic                      as G
+import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
+import           Data.UtilInternal                      (traverseWithKey_)
 
 -- import           Control.Applicative ((<$>))
+import qualified Control.Par.Class                      as PC
+import qualified Data.Foldable                          as F
 import           Data.IORef
-import qualified Data.Foldable as F
-import qualified Data.Map.Strict as M
-import           Data.List (intersperse)
-import           System.IO.Unsafe (unsafeDupablePerformIO)
-import qualified Control.Par.Class        as PC
+import           Data.List                              (intersperse)
+import qualified Data.Map.Strict                        as M
+import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
-import           Data.Par.Map () -- For instances.
+import           Data.Par.Map                           ()
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
@@ -140,7 +141,7 @@ _unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
     let mpref = (L.state lv)
     mp <- liftIO$ readIORef mpref
     case M.lookup key mp of
-      Just x -> return (False,x)
+      Just x  -> return (False,x)
       Nothing -> go2
   go2 = do
            bot <- G.newBottom

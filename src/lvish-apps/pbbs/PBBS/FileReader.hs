@@ -1,5 +1,8 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables, CPP #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 -- | Utilities for reading PBBS data files, etc.
@@ -13,55 +16,54 @@ module PBBS.FileReader
          -- * PBBS specific
          readAdjacencyGraph, parseAdjacencyGraph,
          AdjacencyGraph(..), NodeID, nbrs,
-         
+
          -- * Generally useful utilities
          readNumFile, parReadNats,
-                      
+
          -- * Testing
          t0,t1,t2,t3,t3B,t4,t5,
          unitTests
-       ) where 
+       ) where
 
-import Control.Monad   (foldM)
-import Control.DeepSeq (NFData,rnf)
-import Control.Exception (evaluate)
-import Control.Monad (unless)
-import Control.Concurrent (getNumCapabilities)
-import Control.LVish as LV
-import Control.LVish.Internal (liftIO)
-import qualified Data.LVar.IVar as I
+import           Control.Concurrent          (getNumCapabilities)
+import           Control.DeepSeq             (NFData, rnf)
+import           Control.Exception           (evaluate)
+import           Control.LVish               as LV
+import           Control.LVish.Internal      (liftIO)
+import           Control.Monad               (foldM, unless)
+import qualified Data.LVar.IVar              as I
 
-import Data.Word
-import Data.Char (isSpace)
-import Data.Maybe (fromJust)
-import qualified Data.Vector.Unboxed as U
+import qualified Data.ByteString             as S
+import qualified Data.ByteString.Char8       as B
+import           Data.ByteString.Unsafe      (unsafeHead, unsafeTail)
+import           Data.Char                   (isSpace)
+import           Data.Maybe                  (fromJust)
+import           Data.Time.Clock
+import qualified Data.Vector.Unboxed         as U
 import qualified Data.Vector.Unboxed.Mutable as M
-import qualified Data.ByteString as S
-import qualified Data.ByteString.Char8 as B
-import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
-import Data.Time.Clock
+import           Data.Word
 
-import System.IO.Posix.MMap (unsafeMMapFile)
-import Test.HUnit
-import Prelude hiding (min,max,fst,last)
+import           Prelude                     hiding (fst, last, max, min)
+import           System.IO.Posix.MMap        (unsafeMMapFile)
+import           Test.HUnit
 
 --------------------------------------------------------------------------------
 -- PBBS specific:
 
 data AdjacencyGraph =
   AdjacencyGraph {
-    vertOffets :: U.Vector Word, 
+    vertOffets :: U.Vector Word,
     allEdges   :: U.Vector Word
   }
  deriving (Read,Show,Eq,Ord)
 
 nbrs :: AdjacencyGraph -> NodeID -> U.Vector NodeID
-nbrs AdjacencyGraph{vertOffets, allEdges} nid = 
+nbrs AdjacencyGraph{vertOffets, allEdges} nid =
     let ind = vertOffets U.! (fromIntegral nid)
         nxt = vertOffets U.! (fromIntegral (nid+1))
         suff = U.drop (fromIntegral ind) allEdges in
     if fromIntegral nid == U.length vertOffets - 1
-    then suff 
+    then suff
     else U.take (fromIntegral$ nxt-ind) suff
 
 type NodeID = Word
@@ -76,10 +78,10 @@ readAdjacencyGraph path = do
 
 -- | Parse a PBBS AdjacencyGraph file from a ByteString, in parallel.
 parseAdjacencyGraph :: Int -> B.ByteString -> Par d s AdjacencyGraph
-parseAdjacencyGraph chunks bs = 
+parseAdjacencyGraph chunks bs =
   case B.splitAt (B.length tag) bs of
     (fst, rst) | fst /= tag -> error$ "readAdjacencyGraph: First word in file was not "++B.unpack tag
-               | otherwise -> do                 
+               | otherwise -> do
       ls <- parReadNats chunks rst
       let vec  = U.concat (sewEnds ls)
           vec' = U.drop 2 vec
@@ -123,7 +125,7 @@ readNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty, Show nty, Read n
                FilePath -> IO [U.Vector nty]
 readNumFile path = do
   bs    <- unsafeMMapFile path
-  ncpus <- getNumCapabilities 
+  ncpus <- getNumCapabilities
   ls    <- runParIO $ parReadNats (ncpus * overPartition) bs
   return (sewEnds ls)
 
@@ -131,14 +133,14 @@ testReadNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty, Show nty, Re
                    FilePath -> IO [U.Vector nty]
 testReadNumFile path = do
   bs    <- unsafeMMapFile path
-  ncpus <- getNumCapabilities 
+  ncpus <- getNumCapabilities
   ls    <- runParIO $ parReadNats (ncpus * overPartition) bs
   consume ls
   let ls' = sewEnds ls
   putStrLn $ "Number of chunks after sewing: "++show (length ls')
   putStrLn $ "Lengths: "++show (map U.length ls')++" sum "++ show(sum$ map U.length ls')
   let flat = U.concat ls'
-  if (U.toList flat == map (read . B.unpack) (B.words bs)) 
+  if (U.toList flat == map (read . B.unpack) (B.words bs))
    then putStrLn "Sewed version matched expected!!"
    else error "Did not match expected!"
   return ls'
@@ -163,9 +165,9 @@ parReadNats chunks bs = par
     par :: LV.Par d s [PartialNums nty]
     par = do _ <- I.new
              parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
-                                  mapper reducer []              
+                                  mapper reducer []
 
---------------------------------------------------------------------------------                          
+--------------------------------------------------------------------------------
 -- Partially parsed number fragments
 --------------------------------------------------------------------------------
 
@@ -183,10 +185,10 @@ data RightFrag n = RightFrag {
                 -- through addition (shifting first if it represents a left-half).
                 }
   deriving (Show,Eq,Ord,Read)
-           
+
 data LeftFrag n = LeftFrag !n
   deriving (Show,Eq,Ord,Read)
-           
+
 -- | A fragment from the middle of a number, (potentially) missing pieces on both ends.
 data MiddleFrag n = MiddleFrag {-# UNPACK #-} !Int !n
   deriving (Show,Eq,Ord,Read)
@@ -209,13 +211,13 @@ sewEnds [] = []
 sewEnds origls = loop Nothing origls
  where
    loop _mleft []     = error "Internal error."
-   loop mleft [last] = 
+   loop mleft [last] =
      case last of
-       Single _                  -> error "sewEnds: Got a MiddleFrag at the END!"
-       Compound _ _ (Just _)     -> error "sewEnds: Got a LeftFrag at the END!"
-       Compound rf ls Nothing    -> sew mleft rf ls
-     
-   loop mleft (Compound rf ls lf : rst) = 
+       Single _               -> error "sewEnds: Got a MiddleFrag at the END!"
+       Compound _ _ (Just _)  -> error "sewEnds: Got a LeftFrag at the END!"
+       Compound rf ls Nothing -> sew mleft rf ls
+
+   loop mleft (Compound rf ls lf : rst) =
      sew mleft rf ls ++ loop lf rst
 
    -- TODO: Test this properly... doesn't occur in most files:
@@ -223,14 +225,14 @@ sewEnds origls = loop Nothing origls
      case mleft of
        Nothing           -> loop (Just (LeftFrag m)) rst
        Just (LeftFrag n) -> loop (Just (LeftFrag (shiftCombine n m nd))) rst
-         
-   sew mleft rf ls = 
+
+   sew mleft rf ls =
      case (mleft, rf) of
        (Just (LeftFrag n), Just (RightFrag nd m)) -> let num = shiftCombine n m nd in
-                                                     U.singleton num : ls 
-       (Just (LeftFrag n), Nothing)               -> U.singleton n   : ls 
-       (Nothing, Just (RightFrag _ m))            -> U.singleton m   : ls 
-       (Nothing, Nothing)                         ->                   ls 
+                                                     U.singleton num : ls
+       (Just (LeftFrag n), Nothing)               -> U.singleton n   : ls
+       (Nothing, Just (RightFrag _ m))            -> U.singleton m   : ls
+       (Nothing, Nothing)                         ->                   ls
 
    shiftCombine n m nd = n * (10 ^ (fromIntegral nd :: nty)) + m
 
@@ -240,7 +242,7 @@ sewEnds origls = loop Nothing origls
 --------------------------------------------------------------------------------
 
 -- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word] #-}
--- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word8] #-}  
+-- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word8] #-}
 -- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word16] #-}
 -- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word32] #-}
 -- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word64] #-}
@@ -252,13 +254,13 @@ sewEnds origls = loop Nothing origls
 readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) => S.ByteString -> IO (PartialNums nty)
 readNatsPartial bs
  | bs == S.empty = return (Single (MiddleFrag 0 0))
- | otherwise = do   
+ | otherwise = do
   let hd         = S.head bs
       charsTotal = S.length bs
   initV <- M.new (vecSize charsTotal)
   (vs,lfrg) <- scanfwd charsTotal 0 initV [] hd (S.tail bs)
   -- putStrLn$ " Got back "++show(length vs)++" partial reads"
-  
+
   -- Once we are done looping we need some logic to figure out the corner cases:
   ----------------------------------------
   let total = sum $ map U.length vs
@@ -267,25 +269,25 @@ readNatsPartial bs
          rest  = U.tail (head vs) : tail vs
          -- If we start in the middle of a number, then the RightFrag goes till the first whitespace:
          rfrag = Just (RightFrag (fromJust$ S.findIndex (not . digit) bs) first) in
-     if total == 0 
+     if total == 0
      then case lfrg of
            Nothing           -> return (Compound rfrag [] Nothing)
            Just (LeftFrag w) -> return (Single$ MiddleFrag charsTotal w)
      else return (Compound rfrag   rest lfrg)) -- Rfrag gobbles first.
    else   return (Compound Nothing vs   lfrg) -- May be completely empty (whitespace only).
-  ---------------------------------------- 
+  ----------------------------------------
  where
    -- Given the number of characters left, how big of a vector chunk shall we allocate?
    -- vecSize n = min chunkSize ((n `quot` 2) + 1) -- At minimum numbers must be one character.
    vecSize n = ((n `quot` 4) + 1) -- Assume at least 3 digit numbers... tunable parameter.
-   
+
    -- loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> S.ByteString ->
    --         IO (M.IOVector nty, Maybe (LeftFrag nty), Int)
    loop !lmt !ind !acc !vec !vecacc !nxt !rst
      -- Extend the currently accumulating number in 'acc':
      | digit nxt =
-       let acc' = (10*acc + (fromIntegral nxt-48)) in 
-       if lmt == 1 
+       let acc' = (10*acc + (fromIntegral nxt-48)) in
+       if lmt == 1
        then closeOff vec vecacc ind (Just (LeftFrag acc'))
        else loop (lmt-1) ind acc' vec vecacc (unsafeHead rst) (unsafeTail rst)
 
@@ -298,7 +300,7 @@ readNatsPartial bs
          loop lmt 0 acc fresh (vec':vecacc) nxt rst
 
      | otherwise =
-       do M.write vec ind acc          
+       do M.write vec ind acc
           if lmt == 1
             then closeOff vec vecacc (ind+1) Nothing
             else scanfwd (lmt-1) (ind+1) vec vecacc (unsafeHead rst) (unsafeTail rst)
@@ -311,7 +313,7 @@ readNatsPartial bs
 
    digit nxt = nxt >= 48 && nxt <= 57
 
-   closeOff vec vecacc ind frag = 
+   closeOff vec vecacc ind frag =
      do vec' <- U.unsafeFreeze (M.take ind vec)
         return (reverse (vec':vecacc), frag)
 
@@ -362,7 +364,7 @@ t2 = do t0_ <- getCurrentTime
         t2_ <- getCurrentTime
         putStrLn$ "Time parsing/reading "++show (diffUTCTime t1_ t0_)++
                   " and coalescing "++show(diffUTCTime t2_ t1_)
-        
+
 -- This one is fast... but WHY?  It should be the same as the hacked 1-chunk parallel versions.
 t3 :: IO [PartialNums Word]
 t3 = do bs <- unsafeMMapFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
@@ -459,7 +461,7 @@ Ok, let's take a look at the actual output sizes:
     Result: 1 segments of output
      <segment, length 69,568,627>
 
-vs. 
+vs.
 
     $ time ./t4_use_readFile.exe +RTS -N1 -s
     Using parReadNats + readFile

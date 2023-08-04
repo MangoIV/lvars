@@ -8,22 +8,22 @@ module Monotonic
        -- Control.LVish.Monotonic
        where
 
-import Control.DeepSeq
+import           Control.DeepSeq
 
-import qualified Control.LVish as L
-import qualified Data.LVar.IVar as I
-import qualified Data.LVar.PureSet  as S
+import qualified Control.LVish     as L
+import qualified Data.LVar.IVar    as I
+import qualified Data.LVar.PureSet as S
 
-import Classes
+import           Classes
 
-import Data.Word
-import Data.IORef
-import qualified Data.Set as Set
+import           Data.IORef
+import qualified Data.Set          as Set
+import           Data.Word
 --------------------------------------------------------------------------------
 
 
 -- | A value used in a monotonic computation.
-newtype Mono a = Mono a 
+newtype Mono a = Mono a
 
 -- | A monotonic, parallel computation with side effects.
 newtype MPar a = MPar { unMPar :: L.Par a }
@@ -40,7 +40,7 @@ put_ :: Eq a => I.IVar a -> Mono a -> MPar ()
 put_ i (Mono a) = MPar$ I.put_ i a
 
 get :: I.IVar a -> MPar (Mono a)
-get = MPar . fmap Mono . I.get 
+get = MPar . fmap Mono . I.get
 
 ----------------------------------------
 -- Lifted Set ops:
@@ -67,7 +67,7 @@ speculateFrozen :: (LVishData1 f) =>
 speculateFrozen = error "finishme -speculateFrozen"
 
 -- FIXME: What prevents bad combinations such as a monotonically shrinking set with a
--- monotonically growing set?  
+-- monotonically growing set?
 
 
 --------------------------------------------------------------------------------
@@ -122,7 +122,7 @@ newCounter = undefined
 
 setCounter :: Counter -> Mono Word -> MPar ()
 setCounter = undefined
-  
+
 freezeCounter :: Counter -> L.Par Word
 freezeCounter = undefined
 

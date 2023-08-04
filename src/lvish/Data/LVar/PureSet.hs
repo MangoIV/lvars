@@ -1,15 +1,15 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MagicHash             #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE Trustworthy           #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 {-|
 
@@ -24,42 +24,44 @@
 module Data.LVar.PureSet
        (
          -- * Basic operations
-         ISet(..), 
+         ISet(..),
          newEmptySet, newSet, newFromList,
-         insert, waitElem, waitSize, 
+         insert, waitElem, waitSize,
 
          -- * Iteration and callbacks
-         forEach, forEachHP, 
+         forEach, forEachHP,
 
          -- * Freezing and quasi-deterministic operations
          freezeSetAfter, withCallbacksThenFreeze, freezeSet,
          fromISet,
-         
+
          -- * Higher-level derived operations
          copy, traverseSet, traverseSet_, union, intersection,
-         cartesianProd, cartesianProds, 
+         cartesianProd, cartesianProds,
 
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseSetHP, traverseSetHP_, unionHP, intersectionHP,
          cartesianProdHP, cartesianProdsHP
        ) where
 
-import           Control.Monad (void)
-import           Data.IORef
-import           Data.Atomics (atomicModifyIORefCAS)
-import           Data.List (intersperse)
-import qualified Data.Set as S
-import qualified Data.LVar.IVar as IV
-import qualified Data.Foldable as F
-import           Data.LVar.Generic
-import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
-import           Control.LVish as LV
+import           Control.LVish                          as LV
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.Internal as LI
-import           Control.LVish.Internal.SchedIdempotent (newLV, putLV, getLV, freezeLV, freezeLVAfter)
+import           Control.LVish.Internal                 as LI
+import           Control.LVish.Internal.SchedIdempotent (freezeLV,
+                                                         freezeLVAfter, getLV,
+                                                         newLV, putLV)
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import           System.IO.Unsafe (unsafeDupablePerformIO)
+import           Control.Monad                          (void)
+import           Data.Atomics                           (atomicModifyIORefCAS)
+import qualified Data.Foldable                          as F
+import           Data.IORef
+import           Data.List                              (intersperse)
+import           Data.LVar.Generic
+import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
+import qualified Data.LVar.IVar                         as IV
+import qualified Data.Set                               as S
 import           Prelude
+import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
 -- LK: Why is it ok to just write WrapPar and LVar instead of LI.WrapPar
 -- and LI.LVar?  Where are they being imported from?
@@ -78,7 +80,7 @@ newtype ISet s a = ISet (LVar s (IORef (S.Set a)) a)
 
 -- | Physical identity, just as with `IORef`s.
 instance Eq (ISet s v) where
-  ISet lv1 == ISet lv2 = state lv1 == state lv2 
+  ISet lv1 == ISet lv2 = state lv1 == state lv2
 
 -- | An `ISet` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
@@ -101,7 +103,7 @@ instance F.Foldable (ISet Frzn) where
   foldr fn zer (ISet lv) =
     -- It's not changing at this point, no problem if duped:
     let set = unsafeDupablePerformIO (readIORef (state lv)) in
-    F.foldr fn zer set 
+    F.foldr fn zer set
 
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (ISet Trvrsbl) where
@@ -146,23 +148,23 @@ newFromList ls = newSet (S.fromList ls)
 -- | Freeze an 'ISet' after a specified callback/handler is done running.  This
 -- differs from `withCallbacksThenFreeze` by not taking an additional action to run in
 -- the context of the handlers.
--- 
+--
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
-freezeSetAfter :: (HasPut e, HasGet e, HasFreeze e) => 
+freezeSetAfter :: (HasPut e, HasGet e, HasFreeze e) =>
                   ISet s a -> (a -> Par e s ()) -> Par e s ()
 freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: (HasPut e, HasGet e, HasFreeze e, Eq b) => 
+withCallbacksThenFreeze :: (HasPut e, HasGet e, HasFreeze e, Eq b) =>
                            ISet s a -> (a -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
     do
-       hp  <- newPool 
+       hp  <- newPool
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
        dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: (1/3) pool & result ivar created, now freezeLVAfter..."
-       WrapPar$ 
+       WrapPar$
          freezeLVAfter lv (initCB hp res) deltCB
        -- We additionally have to quiesce here because we fork the inital set of
        -- callbacks on their own threads:
@@ -174,7 +176,7 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
     deltCB x = return$ Just$ unWrapPar$ callback x
     initCB hp resIV ref unlockSet = (do
       unWrapPar $ dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: inside global initCB..."
-              
+
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       set <- L.liftIO $ readIORef ref -- Snapshot
@@ -198,7 +200,7 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
 -- fixed for the tree-based representation of sets that "Data.Set"
 -- uses.)
 freezeSet :: HasFreeze e => ISet s a -> Par e s (S.Set a)
-freezeSet (ISet (WrapLVar lv)) = 
+freezeSet (ISet (WrapLVar lv)) =
    do dbgChatterOnly (2) "PureSet.freezeSet: (1/2) call freezeLV"
       WrapPar $ freezeLV lv
       dbgChatterOnly (2) "PureSet.freezeSet: (2/2) call getLV"
@@ -210,8 +212,8 @@ freezeSet (ISet (WrapLVar lv)) =
 
 -- | /O(1)/: Convert from an `ISet` to a plain `Data.Set`.
 --   This is only permitted when the `ISet` has already been frozen.
---   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`. 
-fromISet :: Ord a => ISet Frzn a -> S.Set a 
+--   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.
+fromISet :: Ord a => ISet Frzn a -> S.Set a
 -- Alternate names? -- toPure? toSet? fromFrzn??
 fromISet (ISet lv) = unsafeDupablePerformIO (readIORef (state lv))
 
@@ -231,7 +233,7 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
     globalCB ref unlockSet = do
       set <- L.liftIO$ readIORef ref -- Snapshot
       L.liftIO unlockSet
-      unWrapPar $ 
+      unWrapPar $
         F.foldlM (\() v -> forkHP hp $ callb v) () set -- Non-allocating traversal.
 
 -- | Add an (asynchronous) callback that listens for all new elements added to
@@ -241,7 +243,7 @@ forEach = forEachHP Nothing
 
 {-# INLINE insert #-}
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
--- set.     
+-- set.
 insert :: HasPut e => Ord a => a -> ISet s a -> Par e s ()
 insert !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter ref  = atomicModifyIORefCAS ref update
@@ -265,7 +267,7 @@ waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
         True  -> return (Just ())
         False -> return (Nothing)
     deltaThresh e2 | e2 == elm = return $ Just ()
-                   | otherwise  = return Nothing 
+                   | otherwise  = return Nothing
 
 
 -- | Wait on the /size/ of the set, not its contents.
@@ -311,8 +313,8 @@ intersection = intersectionHP Nothing
 
 -- | Take the cartesian product of two sets.
 cartesianProd :: (HasPut e, Ord a, Ord b) => ISet s a -> ISet s b -> Par e s (ISet s (a,b))
-cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2 
-  
+cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2
+
 -- | Take the cartesian product of several sets.
 cartesianProds :: (HasPut e, Ord a) => [ISet s a] -> Par e s (ISet s [a])
 cartesianProds ls = cartesianProdsHP Nothing ls
@@ -326,14 +328,14 @@ traverseSetHP :: (HasPut e, Ord b) => Maybe HandlerPool -> (a -> Par e s b) -> I
                  Par e s (ISet s b)
 traverseSetHP mh fn set = do
   os <- newEmptySet
-  traverseSetHP_ mh fn set os  
+  traverseSetHP_ mh fn set os
   return os
 
 -- | Variant of `traverseSet_` that optionally ties the handlers to a pool.
 traverseSetHP_ :: (HasPut e, Ord b) => Maybe HandlerPool -> (a -> Par e s b) -> ISet s a -> ISet s b ->
                   Par e s ()
 traverseSetHP_ mh fn set os = do
-  forEachHP mh set $ \ x -> do 
+  forEachHP mh set $ \ x -> do
     x' <- fn x
     insert x' os
 
@@ -356,11 +358,11 @@ intersectionHP mh s1 s2 = do
   forEachHP mh s1 (fn os s2)
   forEachHP mh s2 (fn os s1)
   return os
- where  
+ where
   fn outSet (ISet lv) elm = do
-    -- At this point 'elm' has ALREADY been added to "us", we check "them":    
+    -- At this point 'elm' has ALREADY been added to "us", we check "them":
     peek <- LI.liftIO$ readIORef (state lv)
-    if S.member elm peek 
+    if S.member elm peek
       then insert elm outSet
       else return ()
 
@@ -400,8 +402,8 @@ cartesianProdsHP mh ls = do
   let loop done [] acc = acc
       loop done (nxt:rest) acc =
         addHandler hp nxt (fn os done rest)
-        
---  forM_ ls $ \ inSet -> do 
+
+--  forM_ ls $ \ inSet -> do
 --    addHandler hp s1 (fn os s2 (\ x y -> (x,y)))
 
   return os

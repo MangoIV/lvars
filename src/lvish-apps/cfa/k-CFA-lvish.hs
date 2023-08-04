@@ -1,8 +1,9 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE RankNTypes           #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 module Main where
@@ -10,44 +11,44 @@ module Main where
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
 
-import Control.Applicative (liftA2, liftA3)
-import qualified Control.Monad.State as State
-import Control.Monad
-import Control.Exception (evaluate)
-import Control.Concurrent
-import           System.IO.Unsafe (unsafePerformIO)
-import           System.Mem.StableName (makeStableName, hashStableName)
+import           Control.Applicative            (liftA2, liftA3)
+import           Control.Concurrent
+import           Control.Exception              (evaluate)
+import           Control.Monad
+import qualified Control.Monad.State            as State
+import           System.IO.Unsafe               (unsafePerformIO)
+import           System.Mem.StableName          (hashStableName, makeStableName)
 
-import qualified Data.Map as M
-import qualified Data.Set as S
-import Data.List ((\\))
-import Debug.Trace
+import           Data.List                      ((\\))
+import qualified Data.Map                       as M
+import qualified Data.Set                       as S
+import           Debug.Trace
 
-import Control.LVish
-import Control.LVish.DeepFrz
-import Control.LVish.Internal (liftIO)
-import Control.LVish.SchedIdempotent (dbgLvl)
+import           Control.LVish
+import           Control.LVish.DeepFrz
+import           Control.LVish.Internal         (liftIO)
+import           Control.LVish.SchedIdempotent  (dbgLvl)
 #define NONSCALABLE
 #ifdef NONSCALABLE
-import  Data.LVar.PureSet as IS
-import  Data.LVar.PureMap as IM
+import           Data.LVar.PureMap              as IM
+import           Data.LVar.PureSet              as IS
 #elif defined(HYBRID)
 #warning "Using lockfree map with plain set"
-import  Data.LVar.PureSet as IS
-import  Data.LVar.SLMap as IM
+import           Data.LVar.PureSet              as IS
+import           Data.LVar.SLMap                as IM
 #else
 #warning "Building with genuine lock-free structures."
-import  Data.LVar.SLSet as IS
-import  Data.LVar.SLMap as IM
+import           Data.LVar.SLMap                as IM
+import           Data.LVar.SLSet                as IS
 #endif
-import Text.PrettyPrint as PP
-import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
+import           Text.PrettyPrint               as PP
+import           Text.PrettyPrint.GenericPretty (Generic, Out (doc, docPrec))
 
-import Test.Framework
-import Test.Framework.Providers.HUnit
-import Test.HUnit (Test(..))
+import           Test.Framework
+import           Test.Framework.Providers.HUnit
+import           Test.HUnit                     (Test (..))
 
-import CFA_Common
+import           CFA_Common
 
 -- define INPLACE
 
@@ -105,9 +106,9 @@ instance Ord (State s) where
       then EQ
       else error "Ord State: states are equivalent except for Store... FINISHME"
 --      else (unsafeName s1) `compare` (unsafeName s2)
-  
 
-andthen :: Ordering -> Ordering -> Ordering 
+
+andthen :: Ordering -> Ordering -> Ordering
 andthen EQ b = b
 andthen a _  = a
 
@@ -124,9 +125,9 @@ instance Out (IS.ISet s a) where
 
 instance Out (State s) where
   doc = docPrec 0
-  docPrec _ (State call benv _str time) = 
-   PP.text "State" <+> doc call 
-                   <+> doc benv 
+  docPrec _ (State call benv _str time) =
+   PP.text "State" <+> doc call
+                   <+> doc benv
                    <+> doc time
 
 --------------------------------------------------------------------------------
@@ -134,7 +135,7 @@ instance Out (State s) where
 -- | Mutate a store to increase the set of values that an Addr may bind to.
 storeInsert :: Addr -> Value -> Store s -> Par d s ()
 storeInsert a v s = IM.modify s a newEmptySet (IS.insert v)
-  
+
 -- k-CFA parameters
 
 tick :: Label -> Time -> Time
@@ -146,12 +147,12 @@ atomEval :: BEnv -> Store s -> Exp -> Par d s (Denotable s)
 atomEval benv store Halt    = single HaltClosure
 atomEval benv store (Ref x) = case M.lookup x benv of
     Nothing -> error $ "Variable unbound in BEnv: " ++ show x
-    Just t  -> IM.getKey (Binding x t) store         
+    Just t  -> IM.getKey (Binding x t) store
 atomEval benv _  (Lam l v c) = single (Closure (l, v, c) benv)
 
 single :: Ord a => a -> Par d s (ISet s a)
-single x = do 
-  s <- newEmptySet  
+single x = do
+  s <- newEmptySet
   IS.insert x s
   return s
 
@@ -171,8 +172,8 @@ next seen st0@(State (Call l fun args) benv store time)
     IS.forEach procs $ \ clo -> do
       case clo of
         HaltClosure -> return ()
-        
-        Closure (_, formals, call') benv' -> do 
+
+        Closure (_, formals, call') benv' -> do
           let benv'' = foldr (\formal benv' -> M.insert formal time benv') benv' formals
           allParamConfs <- IS.cartesianProds paramss
           IS.forEach allParamConfs $ \ params -> do
@@ -183,7 +184,7 @@ next seen st0@(State (Call l fun args) benv store time)
             let store' = store
 #else
             store' <- IM.copy store -- Simply REMOVE this to implicitly STOREJOIN
-#endif                      
+#endif
             forM_ (formals `zip` params) $ \(formal, params) ->
               storeInsert (Binding formal time) params store'
             let newST = State call' benv'' store' time'
@@ -191,28 +192,28 @@ next seen st0@(State (Call l fun args) benv store time)
             return ()
           return ()
 
-        Arbitrary -> do 
+        Arbitrary -> do
           allParamConfs <- IS.cartesianProds paramss
           IS.forEach allParamConfs $ \ params -> do
             forM_ params $ \ param -> do
               ms <- escape param store
-              case ms of 
+              case ms of
                 Just state' -> IS.insert state' seen
-                Nothing -> return ()
+                Nothing     -> return ()
           return ()
       return ()
     return ()
 
 -- Extension of my own design to allow CFA in the presence of arbitrary values.
 -- Similar to "sub-0CFA" where locations are inferred to either have either a single
--- lambda flow to them, no lambdas, or all lambdas 
+-- lambda flow to them, no lambdas, or all lambdas
 escape :: Value -> Store s -> Par d s (Maybe (State s))
 -- If an arbitrary value from outside escapes we don't care:
-escape Arbitrary                          _     = return Nothing 
+escape Arbitrary                          _     = return Nothing
 escape HaltClosure                        _     = return Nothing
-escape (Closure (_l, formals, call) benv) store = do 
+escape (Closure (_l, formals, call) benv) store = do
    (benv', store') <- fvStuff formals store
-   return $ Just $ 
+   return $ Just $
      (State call (benv `M.union` benv') store' [])
 
 
@@ -233,7 +234,7 @@ explore :: State s -> Par d s (IS.ISet s (State s))
 explore initial = do
   allSeen <- newEmptySet
 --  liftIO$ putStrLn$ "Kicking off with an initial state: "++show (doc initial)
-  IS.insert initial allSeen   
+  IS.insert initial allSeen
   -- Feedback: recursively feed back new states into allSeen in parallel:
   IS.forEach allSeen (next allSeen)
   return allSeen
@@ -248,22 +249,22 @@ explore initial = do
 --------------------------------------------------------------------------------
 -- User interface
 --------------------------------------------------------------------------------
-  
+
 -- summarize :: S.Set State -> Par Store
 summarize :: IS.ISet s (State s) -> Par d s (Store s)
 summarize states = do
   storeFin <- newEmptyMap
   -- Note: a generic union operation could also handle this:
-  void$ IS.forEach states $ \ (State _ _ store_n _) -> do 
+  void$ IS.forEach states $ \ (State _ _ store_n _) -> do
     void$ IM.forEach store_n $ \ key val -> do
       void$ IS.forEach val $ \ elem  -> do
         IM.modify storeFin key newEmptySet $ \ st -> do
            IS.insert elem st
   return storeFin
-  
+
 -- ("Monovariant" because it throws away information we know about what time things arrive at)
 monovariantStore :: Store s -> Par d s (IM.IMap Var s (IS.ISet s Exp))
-monovariantStore store = do 
+monovariantStore store = do
   mp <- newEmptyMap
   IM.forEach store $ \ (Binding vr _throwaway) d -> do
     IS.forEach d $ \ elm -> do
@@ -271,8 +272,8 @@ monovariantStore store = do
       IM.modify mp vr newEmptySet (IS.insert elm')
     return ()
   return mp
-  
- where   
+
+ where
    monovariantValue :: Value -> Exp
    monovariantValue (Closure (l, v, c) _) = Lam l v c
    monovariantValue HaltClosure           = Halt
@@ -286,7 +287,7 @@ analyse e = runParThenFreeze $ par
    par :: forall d s . Par d s (IM.IMap Var s (IS.ISet s Exp))
    par = do
      logStrLn " [kcfa] Starting program..."
-     newStore <- newEmptyMap 
+     newStore <- newEmptyMap
      (benv, store) <- fvStuff (S.toList (fvsCall e)) newStore
      let initState = State e benv store []
      allStates <- explore initState
@@ -295,16 +296,16 @@ analyse e = runParThenFreeze $ par
      logStrLn $ "Got back finStore: "++show(unsafeName finStore)
 
 {-
-     IM.forEach finStore $ \ k x -> 
+     IM.forEach finStore $ \ k x ->
        logStrLn $ "---Member of final store: "++show(doc (k,x))
-     IS.forEach allStates $ \ x -> 
+     IS.forEach allStates $ \ x ->
        logStrLn $ "---Member of allStates: "++show(doc x)
 -}
      r <- monovariantStore finStore
      return r
 
-    
--- | Get the free vars of an expression 
+
+-- | Get the free vars of an expression
 fvsExp :: Exp -> S.Set Var
 fvsExp Halt         = S.empty
 fvsExp (Ref x)      = S.singleton x
@@ -328,7 +329,7 @@ runExample example = do
   let res = M.toList (fromIMap mp)
   len <- evaluate (length res)
   putStrLn$ "===== #results = "++show len ++ ",  K is "++show k_param
-  when (dbgLvl >= 1) $ 
+  when (dbgLvl >= 1) $
   --  forM_ res $ \(x, ISetSnap es) -> do
     forM_ res $ \(x, es) -> do
       putStrLn (x ++ ":")
@@ -336,6 +337,6 @@ runExample example = do
 
 {-# NOINLINE unsafeName #-}
 unsafeName :: a -> Int
-unsafeName x = unsafePerformIO $ do 
+unsafeName x = unsafePerformIO $ do
    sn <- makeStableName x
    return (hashStableName sn)

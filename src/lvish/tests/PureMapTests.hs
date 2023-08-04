@@ -1,23 +1,25 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds, TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
 module PureMapTests(tests, runTests) where
 
-import Data.LVar.PureSet as IS
-import qualified Data.LVar.PureMap as IM 
-  -- The common interface under test:
-  (IMap, waitSize, waitValue, getKey, insert, newEmptyMap, newFromList, 
-   freezeMap, unionHP, forEach, forEachHP, traverseMap, traverseMapHP, modify)
+import qualified Data.LVar.PureMap as IM (IMap, forEach, forEachHP, freezeMap,
+                                          getKey, insert, modify, newEmptyMap,
+                                          newFromList, traverseMap,
+                                          traverseMapHP, unionHP, waitSize,
+                                          waitValue)
+import           Data.LVar.PureSet as IS
 
 -- TODO: Use backpack for this when it is available:
 #include "CommonMapTests.hs"
 
-type TheMap k s v = IM.IMap k s v 
+type TheMap k s v = IM.IMap k s v
 
 --------------------------------------------------------------------------------
 
@@ -35,8 +37,8 @@ runTests = defaultMain tests
 -- [2013.08.05] RRN: Observing nondeterministic blocked-indefinitely
 -- exception here.
 case_i7b :: Assertion
-case_i7b = do 
-  allowSomeExceptions ["Multiple puts"] $ 
+case_i7b = do
+  allowSomeExceptions ["Multiple puts"] $
     assertEqual "racing insert and modify"
                  (M.fromList [(1,S.fromList [3.33]),
                               (2,S.fromList [0.11,4.44])]) =<<
@@ -51,12 +53,12 @@ i7b = runParQuasiDet $ isQD $ do
   s1 <- IS.newEmptySet
   s2 <- IS.newEmptySet
   IS.insert 0.11 s2
-  f1 <- IV.spawn_ $ do IM.insert 1 s1 mp 
+  f1 <- IV.spawn_ $ do IM.insert 1 s1 mp
                        IM.insert 2 s2 mp
   f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
                        IS.insert 3.33 s
   -- RACE: this modify is racing with the insert of s2:
-  IM.modify mp 2 IS.newEmptySet (IS.insert 4.44) 
+  IM.modify mp 2 IS.newEmptySet (IS.insert 4.44)
 
   IV.get f1; IV.get f2
   mp2 <- IM.freezeMap mp
@@ -68,14 +70,14 @@ v7c :: IO (M.Map Int (S.Set Float))
 v7c = runParQuasiDet $ do
   mp <- IM.newEmptyMap
   s1 <- IS.newEmptySet
-  f1 <- IV.spawn_ $ IM.insert 1 s1 mp 
+  f1 <- IV.spawn_ $ IM.insert 1 s1 mp
   f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
                        IS.insert 3.33 s
   IM.modify mp 2 IS.newEmptySet (IS.insert 4.44)
   f3 <- IV.spawn_ $ IM.modify mp 3 IS.newEmptySet (IS.insert 5.55)
   f4 <- IV.spawn_ $ IM.modify mp 3 IS.newEmptySet (IS.insert 6.6)
   -- No easy way to wait on the total size of all contained sets...
-  -- 
+  --
   -- Need a barrier here.. should have a monad-transformer that provides cilk "sync"
   -- Global quiesce is convenient too..
   IV.get f1; IV.get f2; IV.get f3; IV.get f4
@@ -99,7 +101,7 @@ show03 :: String
 show03 = show$ runParThenFreeze $ isDet $ do
   mp <- IM.newEmptyMap
   IM.insert "key1" (33::Int) mp
-  IM.insert "key2" (44::Int) mp  
+  IM.insert "key2" (44::Int) mp
   return mp
 
 

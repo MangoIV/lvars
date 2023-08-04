@@ -1,14 +1,14 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE GADTs               #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE RankNTypes #-}
 
 module STTests (tests, runTests) where
 
-import           Control.LVish as LV
-import           Control.Par.ST as PST
-import qualified Control.Par.ST.Vec as V
+import           Control.LVish        as LV
+import           Control.Par.ST       as PST
+import qualified Control.Par.ST.Vec   as V
 -- import qualified Control.Par.ST.Vec2              as VV
 
 import           Control.Monad
@@ -16,10 +16,10 @@ import           Control.Monad.ST
 -- import qualified Control.Monad.State.Strict as S
 import qualified Control.Monad.Reader as R
 import           Data.STRef
-import           Data.Vector (freeze, toList)
+import           Data.Vector          (freeze, toList)
+import qualified Data.Vector.Mutable  as MV
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import qualified Data.Vector.Mutable as MV
 
 --------------------------------------------------------------------------------
 
@@ -108,7 +108,7 @@ data Tree a s = Empty
 instance STSplittable (Tree a) where
   type SplitIdx (Tree a) = ()
 
-  splitST () Empty = error "splitST: cannot split empty tree!"
+  splitST () Empty               = error "splitST: cannot split empty tree!"
   splitST () (Node _ left right) = (left, right)
 
   -- | With these the practice is to simply pass a tree, and the STRefs get "freshened":

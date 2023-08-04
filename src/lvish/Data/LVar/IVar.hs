@@ -51,11 +51,11 @@ module Data.LVar.IVar
 
 import           Control.DeepSeq
 import           Control.Exception                      (throw)
-import qualified Control.LVish.Internal.Basics          as LV
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal                 (LVar (WrapLVar),
                                                          Par (WrapPar))
 import qualified Control.LVish.Internal                 as I
+import qualified Control.LVish.Internal.Basics          as LV
 -- -- import qualified Control.LVish.Internal.Types           as LV
 import           Control.Par.EffectSigs
 import qualified Data.Foldable                          as F
@@ -71,7 +71,7 @@ import           System.IO.Unsafe                       (unsafeDupablePerformIO,
 import           System.Mem.StableName                  (hashStableName,
                                                          makeStableName)
 
-import qualified Control.Par.Class        as PC
+import qualified Control.Par.Class                      as PC
 -- -- import qualified Control.Par.Class.Unsafe as PC
 
 ------------------------------------------------------------------------------

@@ -2,9 +2,9 @@ module Data.Concurrent.Bag(Bag, Token, new, put, remove, foreach) where
 
 -- import           Control.Monad
 -- import           Control.Concurrent
-import           System.IO.Unsafe (unsafePerformIO)
+import qualified Data.IntMap      as M
 import           Data.IORef
-import qualified Data.IntMap as M
+import           System.IO.Unsafe (unsafePerformIO)
 
 ------------------------------------------------------------------------------
 -- A nonscalable implementation of a concurrent bag
@@ -34,7 +34,7 @@ new = newIORef (M.empty)
 put :: Bag a -> a -> IO (Token a)
 put b x = do
   uid <- getUID
-  atomicModifyIORef' b $ \m -> (M.insert uid x m, ())  
+  atomicModifyIORef' b $ \m -> (M.insert uid x m, ())
   return (b, uid)
 
 -- | foreach b f will traverse b (concurrently with updates), applying f to each

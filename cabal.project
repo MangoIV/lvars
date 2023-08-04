@@ -1,10 +1,11 @@
 packages:
   src/lvish
-  src/lvish-apps
-  src/lvish-extra
-  src/lvish-graph-algorithms
   src/par-classes
   src/par-collections
-  src/par-mergesort
-  src/par-schedulers
   src/par-transformers
+
+  -- src/lvish-apps
+  -- src/lvish-extra
+  -- src/lvish-graph-algorithms
+  -- src/par-mergesort
+  -- src/par-schedulers

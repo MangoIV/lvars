@@ -1,5 +1,4 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -8,18 +7,18 @@
 module Data.Par.Set
        () where
 
-import Data.Splittable.Class (Split(..))
-import qualified Control.Par.Class as PC
-import qualified Data.Set as S
-import qualified Data.Foldable as F
+import qualified Control.Par.Class     as PC
+import qualified Data.Foldable         as F
+import qualified Data.Set              as S
+import           Data.Splittable.Class (Split (..))
 
 --------------------------------------------------------------------------------
 
 instance PC.Generator (S.Set a) where
   type ElemOf (S.Set a) = a
-  {-# INLINE foldM #-}  
+  {-# INLINE foldM #-}
   foldM = F.foldlM
-  {-# INLINE fold #-}  
+  {-# INLINE fold #-}
   fold  = F.foldl'
 
 
@@ -34,4 +33,4 @@ instance Eq a => Split (S.Set a) where
 --  pmapFold = Sp.pmapReduce
 #else
 -- instance PC.ParFoldable (M.Map k v) where
-#endif  
+#endif

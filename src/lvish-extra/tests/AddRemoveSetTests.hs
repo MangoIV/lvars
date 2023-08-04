@@ -1,25 +1,26 @@
+{-# LANGUAGE DataKinds       #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 -- | Tests for the Data.LVar.AddRemoveSet module.
 
 module AddRemoveSetTests(tests, runTests) where
 
-import Control.Concurrent
-import Test.Tasty.HUnit 
-import Test.Tasty (TestTree, defaultMain, testGroup)
+import           Control.Concurrent
+import           Test.Tasty             (TestTree, defaultMain, testGroup)
+import           Test.Tasty.HUnit
 --import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Tasty.TH (testGroupGenerator)
-import qualified Test.HUnit as HU
-import           TestHelpers2 as T
+import qualified Test.HUnit             as HU
+import           Test.Tasty.TH          (testGroupGenerator)
+import           TestHelpers2           as T
 
-import qualified Data.Set as S
+import qualified Data.Set               as S
 
 import qualified Data.LVar.AddRemoveSet as ARS
 
 import           Control.LVish
-import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
+import           Control.LVish.DeepFrz  (DeepFrz (..), Frzn, Trvrsbl,
+                                         runParThenFreeze, runParThenFreezeIO)
 import           Control.LVish.Internal (liftIO)
 
 --------------------------------------------------------------------------------
@@ -55,7 +56,7 @@ v2 :: IO (S.Set Int)
 v2 = runParQuasiDet $
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ do
-                     -- liftIO$ threadDelay 5000 
+                     -- liftIO$ threadDelay 5000
                      logDbgLn 3$ " [AR-v2] Doing one insert: "++show n
                      ARS.insert n s) [1.. v2size]
         logDbgLn 3$ " [AR-v2] now waiting.."
@@ -65,7 +66,7 @@ v2 = runParQuasiDet $
 
 v2size =
   case numElems of
-    Just x -> x
+    Just x  -> x
     Nothing -> 10
 
 case_v3 :: Assertion
@@ -75,7 +76,7 @@ case_v3 = stressTest T.stressTestReps 15 v3 (\()->True)
 -- If we're doing a guaranteed-deterministic computation we can't
 -- actually read out the contents of the set.
 v3 :: (HasPut e, HasGet e) => Par e s ()
-v3 = 
+v3 =
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ ARS.insert n s) [1..10::Int]
         ARS.waitAddedSize 10 s
@@ -87,12 +88,12 @@ case_v4 = stressTest T.stressTestReps 30 v4 (== (S.fromList [1..10] :: S.Set Int
 
 -- "additions and removals"
 v4 :: (HasPut e, HasGet e, HasFreeze e) => Par e s (S.Set Int)
-v4 = 
+v4 =
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ ARS.insert n s) [1..15]
         mapM_ (\n -> fork $ ARS.remove n s) [11..15]
-        ARS.waitAddedSize 15 s 
-        ARS.waitRemovedSize 5 s 
+        ARS.waitAddedSize 15 s
+        ARS.waitRemovedSize 5 s
         ARS.freezeSet s
 
 -- This one is intentionally undersynchronized.
@@ -112,5 +113,5 @@ i1 = runParQuasiDet $
         mapM_ (\n -> fork $ ARS.remove n s) [11..15]
         -- If we don't wait for 15 additions, they might not all be
         -- there when we check.
-        ARS.waitRemovedSize 5 s 
+        ARS.waitRemovedSize 5 s
         ARS.freezeSet s

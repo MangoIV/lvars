@@ -1,35 +1,36 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
 
-import Control.Applicative (liftA2, liftA3)
-import qualified Control.Monad.State as State
-import Control.Monad
-import Control.DeepSeq
-import Control.Exception (evaluate)
-import           System.IO.Unsafe (unsafePerformIO)
-import           System.Mem.StableName (makeStableName, hashStableName)
+import           Control.Applicative            (liftA2, liftA3)
+import           Control.DeepSeq
+import           Control.Exception              (evaluate)
+import           Control.Monad
+import qualified Control.Monad.State            as State
+import           System.IO.Unsafe               (unsafePerformIO)
+import           System.Mem.StableName          (hashStableName, makeStableName)
 
-import qualified Data.Map as M
-import qualified Data.Set as S
+import qualified Data.Map                       as M
+import qualified Data.Set                       as S
 
-import Data.List ((\\))
+import           Data.List                      ((\\))
 
-import Debug.Trace
-import Text.PrettyPrint as PP
-import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
+import           Debug.Trace
+import           Text.PrettyPrint               as PP
+import           Text.PrettyPrint.GenericPretty (Generic, Out (doc, docPrec))
 
-import Control.LVish.SchedIdempotent (dbgLvl)
-import Test.Framework
-import Test.Framework.Providers.HUnit
-import Test.HUnit (Test(..))
+import           Control.LVish.SchedIdempotent  (dbgLvl)
+import           Test.Framework
+import           Test.Framework.Providers.HUnit
+import           Test.HUnit                     (Test (..))
 
 -- import qualified Control.Parallel.Strategies as Strat
-import Control.Parallel.Strategies 
+import           Control.Parallel.Strategies
 
-import CFA_Common
+import           CFA_Common
 
 --------------------------------------------------------------------------------
 
@@ -74,9 +75,9 @@ instance (Out a) => Out (S.Set a) where
 
 instance Out State where
   doc = docPrec 0
-  docPrec _ (State call benv str time) = 
-   PP.text "State" <+> doc call 
-                   <+> doc benv 
+  docPrec _ (State call benv str time) =
+   PP.text "State" <+> doc call
+                   <+> doc benv
 --                   <+> doc str
                    <+> doc time
 
@@ -89,8 +90,8 @@ instance NFData State where
 
 instance NFData Clo where
   rnf (Closure tup env) = rnf tup `seq` rnf env
-  rnf HaltClosure = ()
-  rnf Arbitrary   = ()
+  rnf HaltClosure       = ()
+  rnf Arbitrary         = ()
 
 instance NFData Bind where
   rnf (Binding v t) = rnf v `seq` rnf t
@@ -120,13 +121,13 @@ atomEval benv _     (Lam l v c) = S.singleton (Closure (l, v, c) benv)
 
 next :: State -> S.Set State -- Next states
 next s@(State (Call l fun args) benv store time)
-  = if  (dbgLvl >= 5) 
+  = if  (dbgLvl >= 5)
     then trace ("next " ++ show (doc s)) result
     else if (dbgLvl >= 1)
          then trace "next " result
          else result
   where
-   result = 
+   result =
     S.fromList $
 --    withStrategy (parBuffer 8 rseq) $  -- These are 100% DUD sparks.
 --    withStrategy (parBuffer 8 rdeepseq) $  -- These get converted (238/5000) but no speedup.
@@ -223,16 +224,16 @@ runExample example = do
     putStrLn$"Input program:\n"++show(doc prog)
   evaluate (rnf res)
   putStrLn$"===== res length "++ show (M.size res) -- len
-  when (dbgLvl >= 1) $ 
+  when (dbgLvl >= 1) $
     forM_ (M.toList res) $ \(x, es) -> do
       putStrLn (x ++ ":")
-      when (dbgLvl >= 3) $ 
+      when (dbgLvl >= 3) $
         mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
 
 
 {-# NOINLINE unsafeName #-}
 unsafeName :: a -> Int
-unsafeName x = unsafePerformIO $ do 
+unsafeName x = unsafePerformIO $ do
    sn <- makeStableName x
    return (hashStableName sn)
 

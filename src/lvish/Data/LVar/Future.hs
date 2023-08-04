@@ -1,6 +1,6 @@
 
+{-# LANGUAGE MagicHash    #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MagicHash             #-}
 
         -- |
 
@@ -28,8 +28,8 @@ import           System.IO.Unsafe                       (unsafeDupablePerformIO,
 import           System.Mem.StableName                  (hashStableName,
                                                          makeStableName)
 
-import qualified Control.Par.Class        as PC
-import qualified Control.Par.Class.Unsafe as PU
+import qualified Control.Par.Class                      as PC
+import qualified Control.Par.Class.Unsafe               as PU
 
 --------------------------------------------------------------------------------
 

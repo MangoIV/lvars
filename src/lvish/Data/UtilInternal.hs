@@ -8,24 +8,29 @@ module Data.UtilInternal
        )
        where
 
-import           Control.Applicative (Const(..), Applicative, pure, (*>))
-import           Control.Monad (void)
-import           Data.Monoid (Monoid(..))
-import qualified Data.Map as M
-import           Prelude ((.))
+import           Control.Applicative (Applicative, Const (..), pure, (*>))
+import           Control.Monad       (void)
+import qualified Data.Map            as M
+import           Data.Monoid         (Monoid (..))
+import           Data.Semigroup      (Semigroup ((<>)))
+import           Prelude             ((.))
 
 --------------------------------------------------------------------------------
 -- Helper code.
 --------------------------------------------------------------------------------
-   
+
 -- Version of traverseWithKey_ from Shachaf Ben-Kiki
 -- (See thread on Haskell-cafe.)
 -- Avoids O(N) allocation when traversing for side-effect.
 
 newtype Traverse_ f = Traverse_ { runTraverse_ :: f () }
+
+instance Applicative f => Semigroup (Traverse_ f) where
+  Traverse_ a <> Traverse_ b = Traverse_ (a *> b)
+
 instance Applicative f => Monoid (Traverse_ f) where
   mempty = Traverse_ (pure ())
-  Traverse_ a `mappend` Traverse_ b = Traverse_ (a *> b)
+  mappend = (<>)
 -- Since the Applicative used is Const (newtype Const m a = Const m), the
 -- structure is never built up.
 --(b) You can derive traverseWithKey_ from myfoldMapWithKey, e.g. as follows:

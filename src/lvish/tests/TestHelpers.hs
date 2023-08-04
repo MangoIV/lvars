@@ -1,9 +1,12 @@
-{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables, RankNTypes #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | To make it easier to build (multithreaded) tests
 
 module TestHelpers
- ( 
+ (
    -- * Testing parameters
    numElems, getNumAgents, producerRatio,
 
@@ -11,59 +14,60 @@ module TestHelpers
    --setTestThreads,
 
    -- * Test initialization, reading common configs
-   stdTestHarness, 
-   
-   -- * A replacement for defaultMain that uses a 1-thread worker pool 
+   stdTestHarness,
+
+   -- * A replacement for defaultMain that uses a 1-thread worker pool
    --defaultMainSeqTests,
 
    -- * Misc utilities
    nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit,
    theEnv,
-   
-   -- timeOutPure, 
+
+   -- timeOutPure,
    exceptionOrTimeOut, allowSomeExceptions, assertException, knownFailure
  )
- where 
+ where
 
-import Control.Monad
-import Control.Exception
+import           Control.Exception
+import           Control.Monad
 --import Control.Concurrent
 --import Control.Concurrent.MVar
-import GHC.Conc
-import Data.IORef
-import Data.Word
-import Data.Time.Clock
-import Data.List (isInfixOf, intersperse, nub)
-import Text.Printf
-import Control.Concurrent (forkOS, forkIO, ThreadId)
+import           Control.Concurrent (ThreadId, forkIO, forkOS)
+import           Data.IORef
+import           Data.List          (intersperse, isInfixOf, nub)
+import           Data.Time.Clock
+import           Data.Word
+import           GHC.Conc
+import           Text.Printf
 -- import Control.Exception (catch, SomeException, fromException, bracket, AsyncException(ThreadKilled))
-import Control.Exception (bracket)
-import System.Environment (withArgs, getArgs, getEnvironment)
-import System.IO (hFlush, stdout, stderr, hPutStrLn)
-import System.IO.Unsafe (unsafePerformIO)
-import System.Mem (performGC)
-import System.Exit
+import           Control.Exception  (bracket)
+import           System.Environment (getArgs, getEnvironment, withArgs)
+import           System.Exit
+import           System.IO          (hFlush, hPutStrLn, stderr, stdout)
+import           System.IO.Unsafe   (unsafePerformIO)
+import           System.Mem         (performGC)
 --import qualified Test.Framework as TF
 --import Test.Framework.Providers.HUnit  (hUnitTestToTests)
 
-import Data.Monoid (mappend, mempty)
+import           Data.Monoid        (mappend, mempty)
 --import Test.Framework.Runners.Console (interpretArgs, defaultMainWithOpts)
 --import Test.Framework.Runners.Options (RunnerOptions'(..))
 --import Test.Framework.Options (TestOptions'(..))
-import qualified Test.Tasty as TST
-import qualified Test.Tasty.HUnit as TSTH
-import qualified Test.HUnit.Base as HUB
-import Test.HUnit as HU
+import           Test.HUnit         as HU
+import qualified Test.HUnit.Base    as HUB
+import qualified Test.Tasty         as TST
+import qualified Test.Tasty.HUnit   as TSTH
 
-import Debug.Trace (trace)
+import           Debug.Trace        (trace)
 
 --------------------------------------------------------------------------------
 
 
 #if __GLASGOW_HASKELL__ >= 704
-import GHC.Conc (getNumCapabilities, setNumCapabilities, getNumProcessors)
+import           GHC.Conc           (getNumCapabilities, getNumProcessors,
+                                     setNumCapabilities)
 #else
-import GHC.Conc (numCapabilities)
+import           GHC.Conc           (numCapabilities)
 getNumCapabilities :: IO Int
 getNumCapabilities = return numCapabilities
 
@@ -71,8 +75,8 @@ setNumCapabilities :: Int -> IO ()
 setNumCapabilities = error "setNumCapabilities not supported in this older GHC!  Set NUMTHREADS and +RTS -N to match."
 
 getNumProcessors :: IO Int
-getNumProcessors = return 1 
-#endif    
+getNumProcessors = return 1
+#endif
 
 theEnv :: [(String, String)]
 theEnv = unsafePerformIO getEnvironment
@@ -84,16 +88,16 @@ theEnv = unsafePerformIO getEnvironment
 
 -- How many elements should each of the tests pump through the queue(s)?
 numElems :: Maybe Int
-numElems = case lookup "NUMELEMS" theEnv of 
+numElems = case lookup "NUMELEMS" theEnv of
              Nothing  -> Nothing -- 100 * 1000 -- 500000
-             Just str -> warnUsing ("NUMELEMS = "++str) $ 
+             Just str -> warnUsing ("NUMELEMS = "++str) $
                          Just (read str)
 
 forkThread :: IO () -> IO ThreadId
-forkThread = case lookup "OSTHREADS" theEnv of 
+forkThread = case lookup "OSTHREADS" theEnv of
                Nothing -> forkIO
-               Just x -> warnUsing ("OSTHREADS = "++x) $ 
-                 case x of 
+               Just x -> warnUsing ("OSTHREADS = "++x) $
+                 case x of
                    "0"     -> forkIO
                    "False" -> forkIO
                    "1"     -> forkOS
@@ -103,18 +107,18 @@ forkThread = case lookup "OSTHREADS" theEnv of
 -- | How many communicating agents are there?  By default one per
 -- thread used by the RTS.
 getNumAgents :: IO Int
-getNumAgents = case lookup "NUMAGENTS" theEnv of 
+getNumAgents = case lookup "NUMAGENTS" theEnv of
                 Nothing  -> getNumCapabilities
-                Just str -> warnUsing ("NUMAGENTS = "++str) $ 
+                Just str -> warnUsing ("NUMAGENTS = "++str) $
                             return (read str)
 
 -- | It is possible to have imbalanced concurrency where there is more
 -- contention on the producing or consuming side (which corresponds to
 -- settings of this parameter less than or greater than 1).
 producerRatio :: Double
-producerRatio = case lookup "PRODUCERRATIO" theEnv of 
+producerRatio = case lookup "PRODUCERRATIO" theEnv of
                  Nothing  -> 1.0
-                 Just str -> warnUsing ("PRODUCERRATIO = "++str) $ 
+                 Just str -> warnUsing ("PRODUCERRATIO = "++str) $
                              read str
 
 warnUsing :: String -> a -> a
@@ -125,11 +129,11 @@ warnUsing str a = trace ("  [Warning]: Using environment variable "++str) a
 setTestThreads :: Int -> HU.Test -> HU.Test
 setTestThreads nm tst = loop False tst
  where
-   loop flg x = 
+   loop flg x =
     case x of
       TestLabel lb t2 -> TestLabel (decor flg lb) (loop True t2)
-      TestList ls -> TestList (map (loop flg) ls)
-      TestCase io -> TestCase (bracketThreads nm io)
+      TestList ls     -> TestList (map (loop flg) ls)
+      TestCase io     -> TestCase (bracketThreads nm io)
 
    -- We only need to insert the numcapabilities in the description string ONCE:
    decor False lb = "N"++show nm++"_"++ lb
@@ -148,8 +152,8 @@ setTestThreads nm tst = loop False tst
 --
 -- WARNING: uses setNumCapabilities.
 stdTestHarness :: (IO Test) -> IO ()
-stdTestHarness genTests = do 
-  numAgents <- getNumAgents 
+stdTestHarness genTests = do
+  numAgents <- getNumAgents
   putStrLn$ "Running with numElems "++show numElems++" and numAgents "++ show numAgents
   putStrLn "Use NUMELEMS, NUMAGENTS, NUMTHREADS to control the size of this benchmark."
   args <- getArgs
@@ -161,12 +165,12 @@ stdTestHarness genTests = do
   -- of benchmarks is quite limited.
   let all_threads = case lookup "NUMTHREADS" theEnv of
                       Just str -> [read str]
-                      Nothing -> nub [1, 2, np `quot` 2, np, 2*np ]
+                      Nothing  -> nub [1, 2, np `quot` 2, np, 2*np ]
   putStrLn $"Running tests for these thread settings: "  ++show all_threads
-  all_tests <- genTests 
+  all_tests <- genTests
 
   -- Don't allow concurent tests (the tests are concurrent!):
-  withArgs (args ++ ["-j1","--jxml=test-results.xml"]) $ do 
+  withArgs (args ++ ["-j1","--jxml=test-results.xml"]) $ do
 
     -- Hack, this shouldn't be necessary, but I'm having problems with -t:
     tests <- case all_threads of
@@ -200,7 +204,7 @@ defaultDbg = 0
 dbgPrint :: Int -> String -> IO ()
 dbgPrint lvl str = if dbg < lvl then return () else do
 --    hPutStrLn stderr str
-    -- hPrintf stderr str 
+    -- hPrintf stderr str
     -- hFlush stderr
     printf str
     hFlush stdout
@@ -217,14 +221,14 @@ dbgPrintLn lvl str = dbgPrint lvl (str++"\n")
 -- containing one of the expected messages.
 assertException  :: [String] -> IO a -> IO ()
 assertException msgs action = do
- x <- catch (do action; return Nothing) 
+ x <- catch (do action; return Nothing)
             (\e -> do putStrLn $ "Good.  Caught exception: " ++ show (e :: SomeException)
                       return (Just $ show e))
- case x of 
+ case x of
   Nothing -> HU.assertFailure "Failed to get an exception!"
-  Just s -> 
+  Just s ->
    if  any (`isInfixOf` s) msgs
-   then return () 
+   then return ()
    else HU.assertFailure $ "Got the wrong exception, expected one of the strings: "++ show msgs
         ++ "\nInstead got this exception:\n  " ++ show s
 
@@ -232,7 +236,7 @@ assertException msgs action = do
 -- either raise a particular exception or produce a particular answer.
 allowSomeExceptions :: [String] -> IO a -> IO (Either SomeException a)
 allowSomeExceptions msgs =
-    allowSomeExceptions' (\ e -> do let estr = show e 
+    allowSomeExceptions' (\ e -> do let estr = show e
                                     return $ any (`isInfixOf` estr) msgs)
                          ("Got the wrong exception, expected one of the strings: "++ show msgs)
 
@@ -244,9 +248,9 @@ knownFailure act =
                             return True)
                   "" act
      return ()
-            
+
 allowSomeExceptions' :: (SomeException -> IO Bool) -> String -> IO a -> IO (Either SomeException a)
-allowSomeExceptions' test failmsg action = do 
+allowSomeExceptions' test failmsg action = do
  catch (do a <- action; evaluate a; return (Right a))
        (\e ->
         do b <- test e
@@ -257,13 +261,13 @@ allowSomeExceptions' test failmsg action = do
               else do HU.assertFailure $ failmsg++ "\nInstead got this exception:\n  " ++ show e
                       error "Should not reach this error...")
 
-                        
+
 exceptionOrTimeOut :: Show a => Double -> [String] -> IO a -> IO ()
 exceptionOrTimeOut time msgs action = do
   x <- timeOut time $
        allowSomeExceptions msgs action
   case x of
-    Just (Right _val) -> HU.assertFailure "exceptionOrTimeOut: action returned successfully!" 
+    Just (Right _val) -> HU.assertFailure "exceptionOrTimeOut: action returned successfully!"
     Just (Left _exn)  -> return () -- Error, yay!
     Nothing           -> return () -- Timeout.
 
@@ -274,7 +278,7 @@ assertNoTimeOut t a = do
   case m of
     Nothing -> do HU.assertFailure$ "assertNoTimeOut: thread failed or timeout occurred after "++show t++" seconds"
                   error "Should not reach this #2"
-    Just a  -> return a  
+    Just a  -> return a
 
 -- | Time-out an IO action by running it on a separate thread, which is killed when
 -- the timer (in seconds) expires.  This requires that the action do allocation, otherwise it will
@@ -292,7 +296,7 @@ timeOut interval act = do
           ThreadDied      -> do putStrLn " [lvish-tests] Time-out check -- thread died!"
                                 return Nothing
           ThreadRunning   -> timeCheckAndLoop
-      timeCheckAndLoop = do 
+      timeCheckAndLoop = do
             now <- getCurrentTime
             let delt :: Double
                 delt = fromRational$ toRational$ diffUTCTime now t0
@@ -302,7 +306,7 @@ timeOut interval act = do
                       -- TODO: <- should probably wait for it to show up as dead.
                       return Nothing
               else do threadDelay (10 * 1000) -- Sleep 10ms.
-                      loop   
+                      loop
   loop
 
 {-# NOINLINE timeOutPure #-}
@@ -317,8 +321,8 @@ timeOutPure tm thnk =
   unsafePerformIO (timeOut tm (evaluate thnk))
 
 assertOr :: Assertion -> Assertion -> Assertion
-assertOr act1 act2 = 
-  catch act1 
+assertOr act1 act2 =
+  catch act1
         (\(e::SomeException) -> act2)
 
 
@@ -353,7 +357,7 @@ splitRange pieces (start,end)
   | len < pieces = [ (i,i) | i <- [start .. end]]
   | otherwise = chunks
  where
-    len = end - start + 1 
+    len = end - start + 1
     chunks = map largepiece [0..remain-1] ++
              map smallpiece [remain..pieces-1]
     (portion, remain) = len `quotRem` pieces
@@ -365,8 +369,8 @@ splitRange pieces (start,end)
         in (offset, (offset + portion - 1))
 
 -- | Print out a SELFTIMED message reporting the time from a given test.
-timeit :: IO a -> IO a 
-timeit ioact = do 
+timeit :: IO a -> IO a
+timeit ioact = do
    start <- getCurrentTime
    res <- ioact
    end   <- getCurrentTime
@@ -383,7 +387,7 @@ defaultMainSeqTests tests = do
   res <- try (case x of
              Left err -> error$ "defaultMainSeqTests: "++err
              Right (opts,_) -> do let opts' = ((mempty{ ropt_threads= Just 1
-                                                      , ropt_test_options = Just (mempty{ 
+                                                      , ropt_test_options = Just (mempty{
                                                           topt_timeout=(Just$ Just defaultTestTimeout)})})
                                                `mappend` opts)
                                   putStrLn $ " [*] Using "++ show (ropt_threads opts')++ " testing threads."
@@ -423,4 +427,4 @@ hUnitTestToTests = go ""
 
 
 
-                    
+

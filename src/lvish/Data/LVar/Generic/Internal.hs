@@ -29,7 +29,8 @@ import           Control.LVish.Internal.Basics
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort, intersperse)
-import           GHC.Prim (unsafeCoerce#)
+import           Data.Kind (Type)
+import           GHC.Exts (unsafeCoerce#)
 -- import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 import GHC.Base (Constraint)
@@ -45,7 +46,7 @@ import GHC.Base (Constraint)
 --
 -- The superclass constraint on this class serves to ensure that once frozen, the
 -- LVar contents are foldable.
-class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
+class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: Type -> Type -> Type)
      --   TODO: if there is a Par class to generalize LVar Par monads, then
      --   it needs to be a superclass of this.
      where  
@@ -79,7 +80,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
     in AFoldable ls'
 
 -- | A class enabling generic creation of new LVars.
-class LVarWBottom (f :: * -> * -> *) where
+class LVarWBottom (f :: Type ->Type -> Type) where
   -- | Requirements for contents types of this LVar.
   type LVContents f a :: Constraint
   

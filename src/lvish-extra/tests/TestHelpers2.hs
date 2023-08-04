@@ -1,5 +1,7 @@
-{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables, RankNTypes #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | This provides additional helpers that depend specifically on the lvish package.
 
@@ -9,20 +11,25 @@ module TestHelpers2
          module TestHelpers
        ) where
 
-import TestHelpers
+import           TestHelpers
 
-import Control.Monad(forM_)
-import Control.Exception (SomeException)
-import Data.Word
-import System.IO (hFlush, stdout, stderr, hPutStrLn)
-import System.Random (randomRIO)
-import Control.Concurrent (threadDelay)
-import Test.HUnit as HU
+import           Control.Concurrent                     (threadDelay)
+import           Control.Exception                      (SomeException)
+import           Control.Monad                          (forM_)
+import           Data.Word
+import           System.IO                              (hFlush, hPutStrLn,
+                                                         stderr, stdout)
+import           System.Random                          (randomRIO)
+import           Test.HUnit                             as HU
 
-import Control.LVish.Internal.SchedIdempotent (dbgLvl)
-import Control.LVish (runParNonDet, runParDetailed, Par, OutDest(..), DbgCfg(..), defaultMemDbgRange)
-import Control.Par.EffectSigs 
-import Debug.Trace
+import           Control.LVish                          (DbgCfg (..),
+                                                         OutDest (..), Par,
+                                                         defaultMemDbgRange,
+                                                         runParDetailed,
+                                                         runParNonDet)
+import           Control.LVish.Internal.SchedIdempotent (dbgLvl)
+import           Control.Par.EffectSigs
+import           Debug.Trace
 
 --------------------------------------------------------------------------------
 
@@ -30,7 +37,7 @@ import Debug.Trace
 -- (artificially) vary thread interleavings.  When a schedule resulting in an
 -- incorrect answer (or exception) is found, it is printed.
 stressTest :: forall a . Show a =>
-              Word -- ^ Number of repetitions 
+              Word -- ^ Number of repetitions
            -> Int  -- ^ Number of workers to run on.  MUST be greater than the maximum
                    --   number of tasks that can run in parallel; otherwise this will deadlock.
            -> (forall s . Par (Ef P G F B I) s a)   -- ^ Computation to run
@@ -44,8 +51,8 @@ stressTest reps workers comp oracle = do
     putStrLn "WARNING: test running normally because we're compiled without -fdebug mode."
     x <- runParNonDet comp
     checkRes ([],Right x)
-#endif            
- where 
+#endif
+ where
   rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] False) workers comp
               putStr "!"
               checkRes x
@@ -55,7 +62,7 @@ stressTest reps workers comp oracle = do
   echoScreen = if dbgLvl >= 10
                then [OutputTo stdout]
                else []
-                       
+
   reploop 0 = return ()
   reploop i = do
     -- putStrLn$  "Running computation in debug mode, logging messages in range: "++show defaultMemDbgRange
@@ -71,13 +78,13 @@ stressTest reps workers comp oracle = do
     reploop (i-1)
 
   checkRes :: ([String], Either SomeException a) -> IO ()
-  checkRes (logs,res) = 
+  checkRes (logs,res) =
     case res of
       Left exn                 -> failit logs ("Bad test outcome--exception: "++show exn)
       Right x | not (oracle x) -> failit logs ("Bad test result: "++show x)
               | otherwise      -> return ()
 
-  failit logs s = do 
+  failit logs s = do
       threadDelay (500 * 1000)
       hPutStrLn stderr $ "\nlstressTest: Found FAILING schedule, length "++show (length logs)
       hPutStrLn stderr "-----------------------------------"

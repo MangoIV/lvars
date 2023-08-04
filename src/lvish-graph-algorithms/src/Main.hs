@@ -1,79 +1,80 @@
-{-# LANGUAGE CPP, ScopedTypeVariables #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 
-import Data.Set as Set
+import           Data.Set                       as Set
 
 -- import Utils
-import Data.LVar.Graph.BFS
-import Data.LVar.Graph.MIS
+import           Data.LVar.Graph.BFS
+import           Data.LVar.Graph.MIS
 
 -- Benchmark utils:
 -- import PBBS.FileReader
-import Data.PBBS.Timing (wait_clocks, runAndReport)
+import           Data.PBBS.Timing               (runAndReport, wait_clocks)
 -- calibrate, measureFreq, commaint,
 
-import Control.LVish
-import Control.LVish.Internal
-import Control.LVish.DeepFrz (runParThenFreezeIO)
-import Control.LVish.DeepFrz.Internal
+import           Control.LVish
+import           Control.LVish.DeepFrz          (runParThenFreezeIO)
+import           Control.LVish.DeepFrz.Internal
+import           Control.LVish.Internal
 -- import qualified Control.LVish.SchedIdempotent as L
 
-import Control.Monad
+import           Control.Monad
 -- import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
-import Control.Monad.ST
-import Control.Exception
-import GHC.Conc
+import           Control.Exception
+import           Control.Monad.ST
+import           GHC.Conc
 -- import Data.Par.Range
 
-import Data.Word
-import Data.Maybe
-import Data.LVar.MaxPosInt as C
-import Data.Time.Clock
-import qualified Data.Traversable as T
-import qualified Data.Vector as V
-import qualified Data.Vector.Unboxed as U
-import qualified Data.Vector.Unboxed.Mutable as M
-import qualified Data.Vector.Storable as UV
-import qualified Data.Vector.Storable.Mutable as MV
-import System.Mem (performGC)
-import System.Environment (getArgs)
-import System.Directory
-import System.Process
+import           Data.LVar.MaxPosInt            as C
+import           Data.Maybe
+import           Data.Time.Clock
+import qualified Data.Traversable               as T
+import qualified Data.Vector                    as V
+import qualified Data.Vector.Storable           as UV
+import qualified Data.Vector.Storable.Mutable   as MV
+import qualified Data.Vector.Unboxed            as U
+import qualified Data.Vector.Unboxed.Mutable    as M
+import           Data.Word
+import           System.Directory
+import           System.Environment             (getArgs)
+import           System.Mem                     (performGC)
+import           System.Process
 
-import Data.Graph.Adjacency
+import           Data.Graph.Adjacency
 
 -- define DEBUG_CHECKS
 
 --------------------------------------------------------------------------------
 
 #if 1
-import Data.LVar.PureSet as S
+import           Data.LVar.PureSet              as S
 #else
 -- [2013.07.09] This one still isn't terminating on 125K+
 --  Well, maybe it's just slow... 5000 takes 2 seconds.
 --  Yes, it's literally over 100 times slower currently.
-import Data.LVar.SLSet as S
+import           Data.LVar.SLSet                as S
 #endif
 
-import qualified Data.LVar.SLSet as SL
+import qualified Data.LVar.SLSet                as SL
 
-import Data.LVar.IStructure as ISt
-import Data.LVar.NatArray as NArr
+import           Data.LVar.IStructure           as ISt
+import           Data.LVar.NatArray             as NArr
 
 --------------------------------------------------------------------------------
 -- Main Program
 --------------------------------------------------------------------------------
-  
+
 main = do
   putStrLn "USAGE: ./bfs_lvish <version> <topo> <graphSize>"
   putStrLn "USAGE:   Topo must be one of: grid rmat rand chain"
   putStrLn "USAGE:   Version must be one of: "
   putStrLn "USAGE:      bfsS bfsN bfsI"
-  putStrLn "USAGE:      misN1 misN2 misN3 misI3 misSeq" 
-  
+  putStrLn "USAGE:      misN1 misN2 misN3 misI3 misSeq"
+
   --------------------------------------------------------------------------------
   args <- getArgs
   let (version,topo,size,wrksize::Double) =
@@ -81,12 +82,12 @@ main = do
           [ver,tp,s,w] -> (ver, tp, read s, read w)
           [ver,tp,s]   -> (ver, tp, read s, 0)
           [ver,tp]     -> (ver, tp,      1000, 0)
-          [ver]        -> (ver, "grid",  1000, 0) 
+          [ver]        -> (ver, "grid",  1000, 0)
           []           -> ("bfsN","grid",1000, 0)
           oth          -> error "Too many command line args!"
       existD d = do b <- doesDirectoryExist d
                     return$ if b then (Just d) else Nothing
-                    
+
   -- Here's a silly hack to let this executable run from different working directories:
   pbbsdirs <- fmap catMaybes $ mapM existD [ "../pbbs"
                                            , "../../pbbs"
@@ -97,9 +98,9 @@ main = do
                    hd:_ -> hd
       datroot = pbbsroot++"/breadthFirstSearch/graphData/data/"
       -- The PBBS Makefile knowns how to build the common graphs:
-      buildPBBSdat file = do 
+      buildPBBSdat file = do
         origdir <- getCurrentDirectory
-        setCurrentDirectory datroot  
+        setCurrentDirectory datroot
         b <- doesFileExist file
         unless b $ do
           putStrLn "Input file does not exist!  Building..."
@@ -126,15 +127,15 @@ main = do
                             system "ghc -threaded gen_chains_graph.hs -o ./gen_chains_graph.exe"
                             system$ "./gen_chains_graph.exe "++show size++" > "++p
                             return ()
-                          return p                          
+                          return p
            _        -> error$"Unknown graph topology: "++topo
-           
+
   putStrLn$"Running config: "++show(version,topo,size)
   ------------------------------------------------------------
   wd <- getCurrentDirectory
   putStrLn$ "Working dir: "++wd
   putStrLn$ "Reading file: "++file
-  t0 <- getCurrentTime  
+  t0 <- getCurrentTime
   gr <- readAdjacencyGraph file
   t1 <- getCurrentTime
   let numVerts = U.length (vertOffsets gr)
@@ -147,21 +148,21 @@ main = do
   putStrLn$ "time for those simple folds: "++show (diffUTCTime t2 t1)
   performGC
   -- writeFile "/tmp/debug" (show gr)
-  -- putStrLn$ "Dumped parsed graph to /tmp/debug"  
+  -- putStrLn$ "Dumped parsed graph to /tmp/debug"
 
 
   runAndReport $ \ clocks_per_micro ->
     let amountWork = (round (wrksize * clocks_per_micro)) in
     case version of
       ----------------------------------------
-      "bfsS" -> do 
+      "bfsS" -> do
                    putStrLn " ! Version 2: BFS only, with sets "
                    let par2 :: Par ('Ef 'P g f b i) s0 (ISet s0 NodeID)
                        par2 = bfs_async gr 0
                    runParThenFreezeIO par2
                    return ()
                    -- set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
-                   -- let ISetSnap s = set                                          
+                   -- let ISetSnap s = set
                    -- putStrLn$ "Connected component, set size "++show (Set.size s)
 
       ----------------------------------------
@@ -179,7 +180,7 @@ main = do
                    return ()
 
       ----------------------------------------
-      "misN1" -> do 
+      "misN1" -> do
               putStrLn " ! Version 5: MIS only, with NatArrays / parForSimple"
               let par :: Par ('Ef 'P 'G b f i) s0 (NatArray s0 Word8)
                   par = maximalIndependentSet parForSimple gr
@@ -193,7 +194,7 @@ main = do
               return ()
 
       ----------------------------------------
-      "misN2" -> do 
+      "misN2" -> do
               putStrLn " ! Version 6: MIS only, with NatArrays / parForTree"
               let par :: Par ('Ef 'P 'G b f i) s0 (NatArray s0 Word8)
                   par = maximalIndependentSet parForTree gr
@@ -201,7 +202,7 @@ main = do
               return ()
 
       ----------------------------------------
-      "misN3" -> do 
+      "misN3" -> do
               putStrLn " ! Version 7: MIS only, with NatArrays / parForL"
               let par :: Par ('Ef 'P 'G b f i) s0 (NatArray s0 Word8)
                   par = maximalIndependentSet parForL gr
@@ -209,7 +210,7 @@ main = do
               return ()
 
       ----------------------------------------
-      "misI3" -> do 
+      "misI3" -> do
               putStrLn " ! Version 8: MIS only, with IStructures / parForL"
               let par :: Par ('Ef 'P 'G f b i) s0 (IStructure s0 Word8)
                   par = maximalIndependentSet2 parForL gr
@@ -220,7 +221,7 @@ main = do
       -- And version 9 sequential is WAY better (>50X faster)
 
       ----------------------------------------
-      "misSeq" -> do 
+      "misSeq" -> do
               putStrLn " ! Version 9: MIS only, sequential"
               evaluate $ maximalIndependentSet3 gr
               return ()
@@ -237,7 +238,7 @@ main = do
 
 
       ----------------------------------------
-      "bfsN_misI" -> do 
+      "bfsN_misI" -> do
               putStrLn " ! Version 11: BFS and then MIS w/ NatArrays/IStructure"
               let par :: Par ('Ef 'P 'G b f i) s0 (IStructure s0 Word8)
                   par = do natarr <- bfs_async_arr2 gr 0
@@ -246,7 +247,7 @@ main = do
               return ()
 
       ----------------------------------------
-      "bfsN_misI_deg" -> do 
+      "bfsN_misI_deg" -> do
               putStrLn " ! Version 12: BFS, MIS, and maxDegree"
               let par :: Par d0 s0 (MaxPosInt s0)
                   par = do natarr <- bfs_async_arr2 gr 0
@@ -288,7 +289,7 @@ main = do
       "misI_barrier_work" -> do
               putStrLn " ! Version 16: "
               let -- par :: Par d0 s0 ()
-                  par = maximalIndependentSet2 parForL gr 
+                  par = maximalIndependentSet2 parForL gr
               IStructSnap vec <- runParThenFreezeIO par
               runParIO_ $ workEachVecMayb amountWork vec
               return ()
@@ -318,8 +319,8 @@ main = do
               let par1 :: Par d0 s0 (MaxPosInt s0, ISet s0 NodeID)
                   par1 = do component <- bfs_async gr 0
                             liftIO$ putStrLn "Got component..."
-                            mc <- maxDegreeS gr component    
-                            return (mc,component)            
+                            mc <- maxDegreeS gr component
+                            return (mc,component)
               (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
               putStrLn$ "Processing finished, max degree was: "++show maxdeg
               let ISetSnap s = set

@@ -1,35 +1,35 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns  #-}
+{-# LANGUAGE CPP           #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeFamilies  #-}
 
 module CFA_Common where
 
-import Control.DeepSeq
-import Control.Applicative (liftA2, liftA3)
-import qualified Control.Monad.State as State
+import           Control.Applicative            (liftA2, liftA3)
+import           Control.DeepSeq
+import qualified Control.Monad.State            as State
 
-import           System.IO.Unsafe (unsafePerformIO)
-import           System.Environment (getEnvironment)
-import           System.Mem.StableName (makeStableName, hashStableName)
+import           System.Environment             (getEnvironment)
+import           System.IO.Unsafe               (unsafePerformIO)
+import           System.Mem.StableName          (hashStableName, makeStableName)
 
-import Debug.Trace
-import Data.Time.Clock
-import Control.Applicative
-import qualified Data.Map as M
-import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
-import System.Random
+import           Control.Applicative
+import qualified Data.Map                       as M
+import           Data.Time.Clock
+import           Debug.Trace
+import           System.Random
+import           Text.PrettyPrint.GenericPretty (Generic, Out (doc, docPrec))
 
-import Test.Framework
-import Test.Framework.Providers.HUnit
-import Test.HUnit (Test(..))
+import           Test.Framework
+import           Test.Framework.Providers.HUnit
+import           Test.HUnit                     (Test (..))
 
-import Control.LVish.DeepFrz
+import           Control.LVish.DeepFrz
 
 -- k-CFA parameters
 
 k_param :: Int
-k_param = 
+k_param =
   case Prelude.lookup "KPARAM" theEnv of
     Just n  -> trace ("Setting K for K-CFA to: "++n) $
                read n
@@ -50,15 +50,15 @@ instance Out Exp
 
 instance DeepFrz Exp where
   type FrzType Exp = Exp
-  
+
 instance NFData Exp where
-  rnf Halt = ()
-  rnf (Ref v) = rnf v
+  rnf Halt             = ()
+  rnf (Ref v)          = rnf v
   rnf (Lam !l ls call) = seq (rnf ls) (rnf call)
 
 instance NFData Call where
   rnf (Call !l e1 ls) = seq (rnf e1) (rnf ls)
-  
+
 -- Helper functions for constructing syntax trees
 -------------------------------------------------
 
@@ -119,7 +119,7 @@ halt e = call (return Halt) [e]
 --            k <- newVar "kont"
 --            lam [a,b,k] $ (call (ref k) [ref b])
 
-#if 0 
+#if 0
 true  = ref "true"
 false = ref "false"
 not_ ls = call (ref "not") ls
@@ -139,11 +139,11 @@ false = do a <- newVar "left"
 
 not_ :: UniqM Exp -> UniqM Exp -> UniqM Call
 not_ bool k1 = do
-      k2 <- newVar "kontB"          
+      k2 <- newVar "kontB"
       a <- newVar "left"
       b <- newVar "right"
       call (k1)
-        [lam [a,b,k2] $ 
+        [lam [a,b,k2] $
          (call (bool)
           [ref b, ref a, ref k2])]
 #endif
@@ -162,7 +162,7 @@ not_ bool k1 = do
 --     b = id (\y -> halt y)
 -- in halt b
 standardExample :: UniqM Call
-standardExample = 
+standardExample =
   let_ "id" (lam ["x", "k"] (call (ref "k") [ref "x"])) $
   call (ref "id") [lam ["z"] (halt (ref "z")),
                    lam ["a"] (call (ref "id") [lam ["y"] (halt (ref "y")),
@@ -170,7 +170,7 @@ standardExample =
 
 -- Example with free varibles (showing escapes):
 fvExample :: UniqM Call
-fvExample = 
+fvExample =
   let_ "id" (lam ["x", "k"] (call (ref "k") [ref "x"])) $
   call (ref "id") [lam ["z"] (call (ref "escape") [ref "z"]),
                    lam ["a"] (call (ref "id") [lam ["y"] (call (ref "escape") [ref "y"]),
@@ -181,7 +181,7 @@ scaleExample :: Int -> UniqM Call-> UniqM Call
 scaleExample 1 ex = ex
 scaleExample n ex =
   let f s = s ++ show n in
-  let_ "const" (lam [f "x", f "y", f "k"] (call (ref (f "k")) [ref (f "x")])) $ 
+  let_ "const" (lam [f "x", f "y", f "k"] (call (ref (f "k")) [ref (f "x")])) $
     call (ref "const") [lam [f "ignore1_"] (scaleExample (n-1) ex),
                         lam [f "ignore2_"] ex,
                         lam [f "z"] (halt (ref (f "z")))]
@@ -194,23 +194,23 @@ standardBig n =
   loop n (error "shouldn't happen")
   where
     loop 0 a = halt (ref a)
-    loop n a = do 
+    loop n a = do
       let z = "z"++show n
           a = "a"++show n
       call (ref "id") [lam [z] (halt (ref z)),
                        lam [a] (loop (n-1) a)]
-        
+
 
 -- boolScramble 0 k = k
 boolScramble :: Integral a => a -> UniqM Exp -> UniqM Call
 boolScramble 0 k = halt k
 boolScramble 1 _ = halt (ref "freeVr")
-boolScramble n k = do 
+boolScramble n k = do
   x <- newVar "x"
   y <- newVar "y"
   k1 <- newVar "kA"
   k2 <- newVar "kB"
-  let (half,rst) = n `quotRem` 2      
+  let (half,rst) = n `quotRem` 2
       l = lam[x,k1]$ boolScramble half       (ref k1)
       r = lam[y,k2]$ boolScramble (half+rst) (ref k2)
   if n `rem` 2 == 0
@@ -223,17 +223,17 @@ notChain n k = do
   nxt <- newVar "nxt"
   notChain (n-1) $ lam[nxt] $
    not_ (ref nxt) k
-  
+
 -- randFrom :: Int -> Int
 -- randFrom n = fst$ next$ mkStdGen n
-  
+
 -- Look here for more:
 -- https://github.com/ilyasergey/reachability/tree/master/benchmarks/gcfa2
 
 blur = mkBlur (lam["fin"] (halt (ref "fin")))
 
 blur2 = mkBlur $ lam["k0"] $
-          freshenNames blur 
+          freshenNames blur
 
 blurN 1 = blur
 blurN n = mkBlur $ lam["k0_"++show n] $
@@ -251,21 +251,21 @@ mkBlur kont =
                  [ lam["k3"] (call' "id" ["a", "k3"])
                  , lam["k4"] body
                  , lam["eta"] (call' _HACK ["eta"])]
-              ])) $ 
+              ])) $
     (call (ref "lp")
      [ref "lp", false, ref "two",
       kont])
  where
    body = (call (ref "blur")
-           [ref "id",  lam ["rr"] $ 
+           [ref "id",  lam ["rr"] $
             call (ref "rr") [true, lam ["r"] $
             (call (ref "blur")
-             [ref "id",  lam ["ss"] $ 
+             [ref "id",  lam ["ss"] $
               call (ref "ss") [false, lam ["s"] $
                (call (ref "blur")
                 [ref "lp0", lam ["anon"] $
                  call (ref "sub1") [ref "n", ref "one",
-                  lam["n2"]$ 
+                  lam["n2"]$
                    call (ref "anon") [ref "s", ref "n2",
                     lam ["n3"] $
                      not_ (ref "n3") (ref "k4")
@@ -314,27 +314,27 @@ makeMain runExample = defaultMain$ hUnitTestToTests$ TestList $
   , TestLabel "scale2" $ TestCase (runExample$ standardBig 4)
   , TestLabel "blur1"   $ TestCase (runExample blur)
   , TestLabel "blur2"  $ TestCase (runExample blur2)
-    
+
   , TestLabel "simple" $ TestCase $ runExample$
-    let_ "fst" (lam ["x","y","k"] (call (ref "k") [ref "x"])) $ 
-    let_ "f" (lam ["z"] (call (ref "z") [ref "z"])) $    
+    let_ "fst" (lam ["x","y","k"] (call (ref "k") [ref "x"])) $
+    let_ "f" (lam ["z"] (call (ref "z") [ref "z"])) $
     call (ref "fst") [ref "f",
-                      ref "fst", 
+                      ref "fst",
                       lam ["l"] (halt (ref "l"))]
-    
+
   , TestLabel "omega" $ TestCase $ runExample$
     let_ "f" (lam ["x"] (call (ref "x") [ref "x"])) $
-    call (ref "f") [ref "f"]    
+    call (ref "f") [ref "f"]
   ] ++
   [ TestLabel ("boolScramble"++show n) $ TestCase $ runExample $ boolScramble n (ref "freeVr")
   | n <- [0..30] ++ [100,200]
   ]++
   [ TestLabel ("notChain"++show n) $ TestCase $ runExample $ call (notChain n (ref "k0")) [ref "k1"]
-  | n <- [300] 
+  | n <- [300]
   ]++
   [ TestLabel ("blurN_"++show n) $ TestCase (runExample$ blurN n)
 --   | n <- [2..8]
-  | n <- [2..3] -- Making this smaller so it completes quicker. 
+  | n <- [2..3] -- Making this smaller so it completes quicker.
   ]
 
 

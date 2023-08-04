@@ -72,7 +72,7 @@ import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import qualified Data.LVar.IVar as IV
 import qualified Data.Map.Strict as M
 import           Data.UtilInternal (traverseWithKey_)
-import           GHC.Prim (unsafeCoerce#)
+import           GHC.Exts (unsafeCoerce#)
 import           Control.LVish.Internal.SchedIdempotent (freezeLV, getLV, newLV,
                                                          putLV, putLV_)
 import qualified Control.LVish.Internal.SchedIdempotent as L

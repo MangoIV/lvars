@@ -27,19 +27,19 @@ module Control.Par.MergeSort.Internal
        )
   where
 
-import           Control.LVish as LVishSched
+import           Control.LVish                as LVishSched
 -- TODO(osa): Disabling these until we implement instances:
 -- import qualified Control.Monad.Par.Scheds.Direct as DirectSched
 -- import qualified Control.Monad.Par.Scheds.Sparks as SparksSched
 -- import qualified Control.Monad.Par.Scheds.Trace  as TraceSched
 
-import           Control.Par.Class (ParThreadSafe ())
-import qualified Control.Par.Class as PC
-import           Control.Par.Class.Unsafe (internalLiftIO)
+import           Control.Par.Class            (ParThreadSafe)
+import qualified Control.Par.Class            as PC
+import           Control.Par.Class.Unsafe     (internalLiftIO)
 import           Control.Par.ST
 
 import           Control.Monad
-import           Control.Monad.ST (ST)
+import           Control.Monad.ST             (ST)
 -- import qualified Control.Monad.State.Strict   as SS
 import           Data.Int
 
@@ -48,7 +48,7 @@ import           Data.Int
 
 #define VFlp SFlp
 #define MVectorFlp SVectorFlp
-import qualified Control.Par.ST.StorableVec2 as V
+import qualified Control.Par.ST.StorableVec2  as V
 import qualified Data.Vector.Storable.Mutable as MV
 
 -- [2013.11.15] Adding new variant:

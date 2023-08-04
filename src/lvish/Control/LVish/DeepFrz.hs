@@ -4,31 +4,8 @@
 {-# LANGUAGE MagicHash         #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE Trustworthy       #-}
+
 {-# LANGUAGE TypeFamilies      #-}
-
-{-|
-
-The `DeepFrz` module provides a way to return arbitrarily complex data
-structures containing LVars from `Par` computations.
-
-The important thing to know is that to use `runParThenFreeze` to run a
-`Par` computation, you must make sure that all types you return from
-the `Par` computation have `DeepFrz` instances.  This means that, if
-you wish to return a user-defined type, you will need to include a bit
-of boilerplate to give it a `DeepFrz` instance.  Here is a complete
-example:
-
-> {-# LANGUAGE TypeFamilies #-}
-> import Control.LVish.DeepFrz
->
-> data MyData = MyData Int deriving Show
->
-> instance DeepFrz MyData where
->   type FrzType MyData = MyData
->
-> main = print (runParThenFreeze (return (MyData 3)))
-
--}
 
 -- TODO: a more detailed (recursive?) DeepFrz instance example might
 -- be really helpful here for people who want to implement their own
@@ -47,11 +24,11 @@ module Control.LVish.DeepFrz
        ) where
 
 -- import Control.LVish (LVarData1(..))
-import Control.LVish.DeepFrz.Internal         (DeepFrz (..), Frzn, NonFrzn,
-                                               Trvrsbl)
-import Control.LVish.Internal                 (Par (WrapPar))
-import Control.Par.EffectSigs
-import Control.LVish.Internal.SchedIdempotent (runPar, runParIO)
+import           Control.LVish.DeepFrz.Internal         (DeepFrz (..), Frzn,
+                                                         NonFrzn, Trvrsbl)
+import           Control.LVish.Internal                 (Par (WrapPar))
+import           Control.LVish.Internal.SchedIdempotent (runPar, runParIO)
+import           Control.Par.EffectSigs
 --------------------------------------------------------------------------------
 
 -- | Under normal conditions, calling a `freeze` operation inside a

@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE KindSignatures    #-}
@@ -27,14 +27,14 @@ module Control.Par.Class.Unsafe
 where
 
 #if __GLASGOW_HASKELL__ < 710
-import Control.Applicative
+import           Control.Applicative
 #endif
 
-import Control.Par.EffectSigs
+import           Control.Par.EffectSigs
 
-import Unsafe.Coerce          (unsafeCoerce)
+import           Unsafe.Coerce          (unsafeCoerce)
 
-import Control.Monad.IO.Class
+import           Control.Monad.IO.Class
 
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
 -- threads.
@@ -83,7 +83,7 @@ class (MonadIO (UnsafeParIO p)) =>
   dropToUnsafe :: p e s a -> UnsafeParIO p a
 
   -- | The inverse of 'dropToUnsafe'.
-  liftUnsafe   :: UnsafeParIO p a -> p e s a 
+  liftUnsafe   :: UnsafeParIO p a -> p e s a
 
 
 -- If we use this design for ParMonad, we suffer these orphan instances:

@@ -1,12 +1,11 @@
 
 
 
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE TypeFamilies  #-}
+{-# LANGUAGE ConstraintKinds     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 
-{-| 
+{-|
 
 Parallel combinators based on top of a 'Par' monad.  Specifically, this module
 provides higher order functions for operating on `Traversable` data structures in
@@ -15,9 +14,9 @@ parallel.
 -}
 
 module Data.Par.Traversable
-  (                             
+  (
     -- * Naive parallel maps on traversable structures.
-    
+
     -- | Because these operations assume only `Traversable`, the best they can do is
     -- to fork one parallel computation per element.
     parMap, ptraverse,
@@ -25,17 +24,17 @@ module Data.Par.Traversable
     -- * Variants that evaluate only down to weak-head-normal-form
     parMap_, ptraverse_
   )
-where 
+where
 
-import Control.DeepSeq
-import Control.Exception (evaluate)
-import Data.Traversable
-import Control.Monad as M hiding (mapM, sequence, join)
-import Prelude hiding (mapM, sequence, head,tail)
+import           Control.DeepSeq
+import           Control.Exception        (evaluate)
+import           Control.Monad            as M hiding (join, mapM, sequence)
+import           Data.Traversable
+import           Prelude                  hiding (head, mapM, sequence, tail)
 
-import Control.Par.Class
-import Control.Par.EffectSigs
-import Control.Par.Class.Unsafe (internalLiftIO)
+import           Control.Par.Class
+import           Control.Par.Class.Unsafe (internalLiftIO)
+import           Control.Par.EffectSigs
 
 -- -----------------------------------------------------------------------------
 -- Parallel maps over Traversable data structures
@@ -74,7 +73,7 @@ parMap_ f xs = mapM spawnWHNF xs >>= mapM get
 --
 ptraverse :: (Traversable t, NFData b, ParFuture p, HasPut e, HasGet e, FutContents p b) =>
            (a -> p e s b) -> t a -> p e s (t b)
-{-# INLINE ptraverse #-}           
+{-# INLINE ptraverse #-}
 ptraverse f xs = mapM (spawn . f) xs >>= mapM get
 
 

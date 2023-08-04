@@ -10,11 +10,11 @@ module Control.Par.Scheds.Sparks
   , runParPoly
   ) where
 
-import           Control.Monad                   (void)
-import           System.IO.Unsafe                (unsafePerformIO)
+import           Control.Monad            (void)
+import           System.IO.Unsafe         (unsafePerformIO)
 
 import           Control.Par.Class
-import qualified Control.Par.Class.Unsafe        as PC
+import qualified Control.Par.Class.Unsafe as PC
 import           Control.Par.EffectSigs
 
 newtype Par (e :: EffectSig) s a =
