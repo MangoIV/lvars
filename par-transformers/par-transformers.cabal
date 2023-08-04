@@ -1,66 +1,66 @@
-Name:                par-transformers
-Version:             1.1
-Synopsis:            Extend Par monads with additional capabilities
+name:               par-transformers
+version:            1.1
+synopsis:           Extend Par monads with additional capabilities
 
 -- Version history:
 --  1.0     : Initial release to replace deprecated monad-par-transformers.
 --  1.1     : Add LVish-2.0 effect signatures
 
-Description:         The modules below provide additional
-                     data structures, and other added capabilities
-                     layered on top of any valid 'Par' monad.
+description:
+  The modules below provide additional
+  data structures, and other added capabilities
+  layered on top of any valid 'Par' monad.
 
-License:             BSD3
-License-file:        LICENSE
-Author:              Ryan Newton, Aaron Todd
-Maintainer:          Omer Agacan
-Copyright:           (c) Ryan Newton, Omer Agacan, Aaron Todd 2015
-Stability:           Experimental
-Category:            Control,Parallelism,Monads
-Build-type:          Simple
-Cabal-version:       >=1.8
+license:            BSD3
+license-file:       LICENSE
+author:             Ryan Newton, Aaron Todd
+maintainer:         Omer Agacan
+copyright:          (c) Ryan Newton, Omer Agacan, Aaron Todd 2015
+stability:          Experimental
+category:           Control,Parallelism,Monads
+build-type:         Simple
+cabal-version:      >=1.8
+extra-source-files: includes/Vec2Common.hs
 
-Extra-source-files: includes/Vec2Common.hs
-
-Source-repository head
+source-repository head
   type:     git
   location: https://github.com/iu-parfunc/lvars
   subdir:   haskell/par-transformers
 
-Library
-  Exposed-modules:
-                 -- A scheduler-transformer that adds cancellation:
-                 Control.LVish.CancelT
-                 -- Control.LVish.DeadlockT
+library
+  exposed-modules:
+    Control.LVish.CancelT
+    Control.Par.ST
+    Control.Par.ST.StorableVec2
+    Control.Par.ST.UVec
+    Control.Par.ST.UVec2
+    Control.Par.ST.Vec
+    Control.Par.ST.Vec2
+    Control.Par.StateT
 
-                 -- State on top of Par is generally useful, but experimental
-                 Control.Par.StateT
+  -- A scheduler-transformer that adds cancellation:
+  -- Control.LVish.DeadlockT
 
-                 Control.Par.ST
-                 Control.Par.ST.Vec
+  -- State on top of Par is generally useful, but experimental
+  -- Deterministic RNG needs more testing.
+  --                 Control.Par.RNG
+  --                 Control.Par.Pedigree
 
-                 Control.Par.ST.Vec2
-                 Control.Par.ST.UVec
-                 Control.Par.ST.UVec2
-                 Control.Par.ST.StorableVec2
+  build-depends:
+      atomic-primops  >=0.6
+    , base            >=4   && <5
+    , cereal          >=0.3
+    , deepseq         >=1.3
+    , ghc-prim
+    , mtl             >=2.0
+    , par-classes     >=1.1 && <2.0
+    , random          >=1.0
+    , transformers    >=0.2
+    , vector          >=0.9
 
-                 -- Deterministic RNG needs more testing.
---                 Control.Par.RNG
---                 Control.Par.Pedigree
-
-  Build-depends: base >= 4 && < 5
-               -- This provides the interface which monad-par implements:
-               , par-classes  >= 1.1 && < 2.0
-               , cereal       >= 0.3
-               , deepseq      >= 1.3
-               , random       >= 1.0
-               , mtl          >= 2.0
-               , transformers >= 0.2
-               , vector       >= 0.9
-               , ghc-prim
-               , atomic-primops >= 0.6
-  ghc-options: -O2 -Wall
-  Include-Dirs: includes/
+  -- This provides the interface which monad-par implements:
+  ghc-options:     -O2 -Wall
+  include-dirs:    includes/
 
 -- Note: This is actually broken with ghc 7.6 on linux, due to a bug
 -- with how ghci interacts with the atomic primops package. This
@@ -68,33 +68,37 @@ Library
 -- directly with: `cabal install; ghc -i. -i tests/CancelTests.hs -i
 -- tests/STTests.hs tests/Main.hs; ./tests/Main`.
 
-Test-suite test-par-transformers
-  Type: exitcode-stdio-1.0
-  Hs-source-dirs: tests/
-  Main-is: Main.hs
-  Other-modules: CancelTests STTests
+test-suite test-par-transformers
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: tests/
+  main-is:        Main.hs
+  other-modules:
+    CancelTests
+    STTests
+
   -- (1) Build depends that are used directly by the test files, including:
   -- (1A) Self dependency:
-  Build-depends: par-transformers
+  build-depends:  par-transformers
+
   -- (1B) Dependencies common to test files and the library:
-  Build-depends: base >= 4 && < 5
-               , par-classes >= 1.1 && < 2.0
-               , mtl    >= 2.0
-               , transformers >= 0.2
-               , vector >= 0.9
-               , ghc-prim
+  build-depends:
+      base          >=4   && <5
+    , ghc-prim
+    , mtl           >=2.0
+    , par-classes   >=1.1 && <2.0
+    , transformers  >=0.2
+    , vector        >=0.9
 
   -- (1C) Additional depends to test concrete instances:
-  Build-depends: lvish >= 2.0
+  build-depends:  lvish >=2.0
 
   -- (1C) Additional build depends for testing:
-  Build-depends:
-    tasty               >= 0.10,
-    tasty-hunit
+  build-depends:
+      tasty        >=0.10
+    , tasty-hunit
 
-  ghc-options: -threaded -Wall -rtsopts -with-rtsopts=-N4 -eventlog
+  ghc-options:    -threaded -Wall -rtsopts -with-rtsopts=-N4 -eventlog
 
   -- Atomic-primops fails when used by template-haskell/ghci on linux:
-  if impl(ghc < 7.7) && os(linux) {
+  if (impl(ghc <7.7) && os(linux))
     buildable: False
-  }

@@ -1,6 +1,5 @@
-
-import           Control.LVish
-import           System.Environment (getArgs)
+import Control.LVish
+import System.Environment (getArgs)
 
 main = do
   [arg] <- getArgs
@@ -8,9 +7,9 @@ main = do
 
   putStrLn "AdjacencyGraph"
   print n
-  print (n-1)
+  print (n - 1)
 
-  for_ (0,n)   $ \ ix -> print ix
-  for_ (0,n-1) $ \ ix -> print (ix+1)
+  for_ (0, n) $ \ix -> print ix
+  for_ (0, n - 1) $ \ix -> print (ix + 1)
 
   return ()

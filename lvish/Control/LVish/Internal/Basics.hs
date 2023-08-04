@@ -1,77 +1,99 @@
-{-# LANGUAGE BangPatterns          #-}
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE InstanceSigs          #-}
-{-# LANGUAGE MagicHash             #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE Rank2Types            #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE Trustworthy           #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
-{-# LANGUAGE ConstraintKinds       #-}
-
 -- | An internal module simply reexported by Control.LVish.
-
 module Control.LVish.Internal.Basics
-  ( Par(), LVar(),
-
-    runPar, runParQuasiDet, runParNonDet,
-    runParPoly, runParPolyIO,
-    runParLogged, runParDetailed,
-    getLogger,
-
-    liftQD,
-    LVishException(..), L.HandlerPool(),
-    fork, yield,
-
-    newPool, withNewPool, withNewPool_,
-    quiesce, forkHP, logDbgLn,
-
-    parForL, parForSimple, parForTree, parForTiled, for_
-
-    , asyncForEachHP
+  ( Par ()
+  , LVar ()
+  , runPar
+  , runParQuasiDet
+  , runParNonDet
+  , runParPoly
+  , runParPolyIO
+  , runParLogged
+  , runParDetailed
+  , getLogger
+  , liftQD
+  , LVishException (..)
+  , L.HandlerPool ()
+  , fork
+  , yield
+  , newPool
+  , withNewPool
+  , withNewPool_
+  , quiesce
+  , forkHP
+  , logDbgLn
+  , parForL
+  , parForSimple
+  , parForTree
+  , parForTiled
+  , for_
+  , asyncForEachHP
   )
-  where
+where
 
-import           Control.Exception                      (SomeException)
-import           Control.LVish.Internal                 as I
+import Control.Exception (SomeException)
+import Control.LVish.Internal as I
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import           Control.LVish.Internal.Types
-import           Control.Monad                          (forM_)
-import           Control.Par.EffectSigs
-import           Prelude                                hiding (rem)
-import qualified System.Log.TSLogger                    as Lg
+import qualified Control.LVish.Internal.SchedUtils as Sch
+import Control.LVish.Internal.Types
+import Control.Monad (forM_)
+import qualified Control.Par.Class as PC
+import Control.Par.EffectSigs
+import qualified Data.Splittable.Class as SC
+import qualified System.Log.TSLogger as Lg
+import Prelude hiding (rem)
 
-import qualified Control.LVish.Internal.SchedUtils      as Sch
-import qualified Control.Par.Class                      as PC
-import qualified Data.Splittable.Class                  as SC
-
-{-# DEPRECATED parForL, parForSimple, parForTree, parForTiled
-    "These will be removed in a future release in favor of a more general approach to loops."  #-}
+{-# DEPRECATED
+  parForL
+  , parForSimple
+  , parForTree
+  , parForTiled
+  "These will be removed in a future release in favor of a more general approach to loops."
+  #-}
 
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 -- Inline *everything*, because these are just wrappers:
 {-# INLINE liftQD #-}
+
 {-# INLINE yield #-}
+
 {-# INLINE newPool #-}
 
 {-# INLINE runPar #-}
+
 {-# INLINE runParQuasiDet #-}
+
 {-# INLINE runParNonDet #-}
+
 {-# INLINE runParPoly #-}
+
 {-# INLINE runParPolyIO #-}
+
 {-# INLINE runParLogged #-}
+
 {-# INLINE runParDetailed #-}
 
---{-# INLINE runParThenFreeze #-}
+-- {-# INLINE runParThenFreeze #-}
 {-# INLINE fork #-}
+
 {-# INLINE quiesce #-}
+
 --------------------------------------------------------------------------------
 
 -- | It is always safe to lift a deterministic computation to a
@@ -95,14 +117,14 @@ quiesce = WrapPar . L.quiesce
 
 -- | Execute a computation in parallel.
 fork :: Par e s () -> Par e s ()
-fork (WrapPar f) = WrapPar$ L.fork f
+fork (WrapPar f) = WrapPar $ L.fork f
 
 -- | A version of `fork` that also allows the forked computation to be tracked in a
 -- `HandlerPool`, that enables the programmer to synchronize on the completion of the
 -- child computation.  But be careful; this does not automatically wait for
 -- all downstream forked computations (transitively).
 forkHP :: Maybe L.HandlerPool -> Par e s () -> Par e s ()
-forkHP mh (WrapPar f) = WrapPar$ L.forkHP mh f
+forkHP mh (WrapPar f) = WrapPar $ L.forkHP mh f
 
 -- | Create a new pool that can be used to synchronize on the completion of all
 -- parallel computations associated with the pool.
@@ -118,10 +140,9 @@ withNewPool f = WrapPar $ L.withNewPool $ unWrapPar . f
 withNewPool_ :: (L.HandlerPool -> Par e s ()) -> Par e s L.HandlerPool
 withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 
-
 -- | Run a `Par` computation where /everything/ is permitted,
 --   i.e. all effect-signature switches can be switched to "on".
-runParNonDet :: (forall s . Par e s a) -> IO a
+runParNonDet :: (forall s. Par e s a) -> IO a
 -- runParNonDet :: (forall s . Par ('Ef 'P 'G 'F 'B 'I) s a) -> IO a
 runParNonDet (WrapPar p) = L.runParIO p
 
@@ -139,12 +160,12 @@ runParNonDet (WrapPar p) = L.runParIO p
 -- Finally, note that in the future `runQuasiDet` may behave differently than
 -- `runNonDet`; in particular, it may attempt recovery or retry strategies when an
 -- LVishException is thrown.
-runParQuasiDet :: (forall s . Par ('Ef p g f b 'NI) s a) -> IO a
+runParQuasiDet :: (forall s. Par ('Ef p g f b 'NI) s a) -> IO a
 runParQuasiDet (WrapPar p) = L.runParIO p
 
 -- | A version of `runParPolyIO` that exposes more debugging information.  That is,
 -- it returns debugging logs, in realtime order, in addition to the final result.
-runParLogged :: (forall s . Par e s a) -> IO ([String],a)
+runParLogged :: (forall s. Par e s a) -> IO ([String], a)
 runParLogged (WrapPar p) = L.runParLogged p
 
 -- | A variant of with `runParPolyIO` with /full/ control over the relevant knobs.
@@ -155,11 +176,14 @@ runParLogged (WrapPar p) = L.runParLogged p
 --   This version of runPar catches ALL exceptions that occur within the runPar, and
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
---
-runParDetailed :: Sch.DbgCfg        -- ^ Debugging configuration
-               -> Int           -- ^ How many worker threads to use.
-               -> (forall s . Par e s a) -- ^ The computation to run.
-               -> IO ([String], Either SomeException a)
+runParDetailed
+  :: Sch.DbgCfg
+  -- ^ Debugging configuration
+  -> Int
+  -- ^ How many worker threads to use.
+  -> (forall s. Par e s a)
+  -- ^ The computation to run.
+  -> IO ([String], Either SomeException a)
 runParDetailed dc nw (WrapPar p) = L.runParDetailed dc nw p
 
 -- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
@@ -168,21 +192,20 @@ runParDetailed dc nw (WrapPar p) = L.runParDetailed dc nw p
 --
 -- (For now there is no sharing of workers with repeated invocations; so
 -- keep in mind that @runPar@ is an expensive operation. [2013.09.27])
-runPar :: (forall s . Par ('Ef 'P 'G 'NF 'B 'NI) s a) -> a
+runPar :: (forall s. Par ('Ef 'P 'G 'NF 'B 'NI) s a) -> a
 runPar (WrapPar p) = L.runPar p
 
 -- | Version of `runPar` that gives you more flexibility in the effect signature of
 -- the input computation.  The downside is th
-runParPoly :: Deterministic e => (forall s . Par e s a) -> a
+runParPoly :: (Deterministic e) => (forall s. Par e s a) -> a
 runParPoly (WrapPar p) = L.runPar p
 
 -- | More flexible alternative to `runParNonDet` and `runParQuasiDet`.  This will run
 -- any kind of `Par` computation, but just like with `runParPoly`, you must fully
 -- constrain the effect signature of the input computation to avoid ambiguity type
 -- errors.
-runParPolyIO :: (forall s . Par e s a) -> IO a
+runParPolyIO :: (forall s. Par e s a) -> IO a
 runParPolyIO (WrapPar p) = L.runParIO p
-
 
 -- | Log a line of debugging output.  This is only used when *compiled* in debugging
 -- mode.  It atomically adds a string onto an in-memory log.
@@ -208,81 +231,86 @@ getLogger = WrapPar $ L.getLogger
 --------------------------------------------------------------------------------
 
 {-# INLINE parForL #-}
+
 -- | Left-biased parallel for loop.  As worker threads beyond the first are added,
 -- this hews closer to the sequential iteration order than an unbiased parallel loop.
---y
+-- y
 -- Takes a range as inclusive-start, exclusive-end.
-parForL :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
-parForL (start,end) _ | start > end = error$"parForL: start is greater than end: "++show (start,end)
-parForL (start,end) body = do
+parForL :: (Int, Int) -> (Int -> Par e s ()) -> Par e s ()
+parForL (start, end) _ | start > end = error $ "parForL: start is greater than end: " ++ show (start, end)
+parForL (start, end) body = do
   -- logStrLn$ " initial iters: "++show (end-start)
   loop 0 (end - start) 1
  where
-   loop offset remain chunk
-     | remain <= 0     = return ()
-     | remain <= chunk = parForSimple (offset, offset+remain) body
-     | otherwise       = do
-         let nxtstrt = offset+chunk
-         -- logStrLn$ "loop:  .. "++show (offset, remain, chunk)
-         fork$ parForSimple (offset, nxtstrt) body
-         loop nxtstrt (remain-chunk) (2*chunk)
+  loop offset remain chunk
+    | remain <= 0 = return ()
+    | remain <= chunk = parForSimple (offset, offset + remain) body
+    | otherwise = do
+        let nxtstrt = offset + chunk
+        -- logStrLn$ "loop:  .. "++show (offset, remain, chunk)
+        fork $ parForSimple (offset, nxtstrt) body
+        loop nxtstrt (remain - chunk) (2 * chunk)
 
 {-# INLINE parForSimple #-}
+
 -- | The least-sophisticated form of parallel loop.  Fork iterations one at a time.
-parForSimple :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
+parForSimple :: (Int, Int) -> (Int -> Par e s ()) -> Par e s ()
 parForSimple range fn = do
   for_ range $ \i -> fork (fn i)
 
 -- | Divide the iteration space recursively, but ultimately run every iteration in
 -- parallel.  That is, the loop body is permitted to block on other iterations.
-parForTree :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
-parForTree (start,end) _
-  | start > end = error$"parForTree: start is greater than end: "++show (start,end)
-parForTree (start,end) body = do
+parForTree :: (Int, Int) -> (Int -> Par e s ()) -> Par e s ()
+parForTree (start, end) _
+  | start > end = error $ "parForTree: start is greater than end: " ++ show (start, end)
+parForTree (start, end) body = do
   loop 0 (end - start)
  where
-   loop offset remain
-     | remain == 1     = body offset
-     | otherwise       = do
-         let (half,rem) = remain `quotRem` 2
-         fork$ loop offset half
-         loop (offset+half) (half+rem)
-
+  loop offset remain
+    | remain == 1 = body offset
+    | otherwise = do
+        let (half, rem) = remain `quotRem` 2
+        fork $ loop offset half
+        loop (offset + half) (half + rem)
 
 -- | Split the work into a number of tiles, and fork it in a tree topology.
-parForTiled :: Maybe L.HandlerPool -> Int -> (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
-parForTiled hp otiles (start,end) body = do
+parForTiled :: Maybe L.HandlerPool -> Int -> (Int, Int) -> (Int -> Par e s ()) -> Par e s ()
+parForTiled hp otiles (start, end) body = do
   loop 0 (end - start) otiles
  where
-   loop offset remain tiles
-     | remain == 1     = body offset
-     | tiles  == 1     = for_ (offset,offset+remain) body
-     | otherwise       = do
-         let (half,rem)   = remain `quotRem` 2
-             (halfT,remT) = tiles `quotRem` 2
-         forkHP hp$ loop offset half halfT
-         loop (offset+half) (half+rem) (halfT+remT)
-
+  loop offset remain tiles
+    | remain == 1 = body offset
+    | tiles == 1 = for_ (offset, offset + remain) body
+    | otherwise = do
+        let (half, rem) = remain `quotRem` 2
+            (halfT, remT) = tiles `quotRem` 2
+        forkHP hp $ loop offset half halfT
+        loop (offset + half) (half + rem) (halfT + remT)
 
 -- | A simple for loop for numeric ranges (not requiring deforestation
 -- optimizations like `forM`).  Inclusive start, exclusive end.
 {-# INLINE for_ #-}
-for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ :: (Monad m) => (Int, Int) -> (Int -> m ()) -> m ()
 for_ (start, end) _fn | start > end = error "for_: start is greater than end"
 for_ (start, end) fn = loop start
-  where
-  loop !i | i == end  = return ()
-          | otherwise = do fn i; loop (i+1)
+ where
+  loop !i
+    | i == end = return ()
+    | otherwise = do fn i; loop (i + 1)
 
 -- | Non-blocking version of pforEach.
-asyncForEachHP :: (SC.Split c, PC.Generator c)
-      => Maybe L.HandlerPool    -- ^ Optional pool to synchronize forked tasks
-      -> c                    -- ^ element generator to consume
-      -> (PC.ElemOf c -> Par e s ()) -- ^ compute one result
-      -> Par e s ()
+asyncForEachHP
+  :: (SC.Split c, PC.Generator c)
+  => Maybe L.HandlerPool
+  -- ^ Optional pool to synchronize forked tasks
+  -> c
+  -- ^ element generator to consume
+  -> (PC.ElemOf c -> Par e s ())
+  -- ^ compute one result
+  -> Par e s ()
 asyncForEachHP mh gen fn =
   case SC.split gen of
     [seqchunk] -> PC.forM_ seqchunk fn
-    ls -> forM_ ls $ \ gen_i ->
-            forkHP mh $
-              PC.forM_ gen_i fn
+    ls -> forM_ ls $ \gen_i ->
+      forkHP mh $
+        PC.forM_ gen_i fn

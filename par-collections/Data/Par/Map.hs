@@ -1,16 +1,14 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP          #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | Provide instances for parallel handling of common, pure Haskell data structures.
+module Data.Par.Map () where
 
-module Data.Par.Map
-       () where
-
-import qualified Control.Par.Class     as PC
-import qualified Data.Map              as M
-import           Data.Splittable.Class (Split (..))
+import qualified Control.Par.Class as PC
+import qualified Data.Map as M
+import Data.Splittable.Class (Split (..))
 
 -- import Control.Applicative
 -- import           Data.Monoid
@@ -18,11 +16,11 @@ import           Data.Splittable.Class (Split (..))
 --------------------------------------------------------------------------------
 
 instance PC.Generator (M.Map k v) where
-  type ElemOf (M.Map k v) = (k,v)
+  type ElemOf (M.Map k v) = (k, v)
   {-# INLINE foldM #-}
   foldM = foldrMWithKey
   {-# INLINE fold #-}
-  fold fn = M.foldlWithKey (\ !a k v -> fn a (k,v))
+  fold fn = M.foldlWithKey (\ !a k v -> fn a (k, v))
 
 #ifdef NEWCONTAINERS
 instance (Eq k, Eq v) => Split (M.Map k v) where
@@ -50,11 +48,11 @@ instance PC.ParFoldable (M.Map k v) where
 -- instance PC.ParFoldable (M.Map k v) where
 #endif
 
-foldrMWithKey :: Monad m => (acc -> (k, v) -> m acc) -> acc -> M.Map k v -> m acc
+foldrMWithKey :: (Monad m) => (acc -> (k, v) -> m acc) -> acc -> M.Map k v -> m acc
 foldrMWithKey fn zer mp =
-   M.foldrWithKey (\ k v m -> m >>= fn2 (k,v)) (return zer) mp
-  where
-    fn2 !pr !a = fn a pr
+  M.foldrWithKey (\k v m -> m >>= fn2 (k, v)) (return zer) mp
+ where
+  fn2 !pr !a = fn a pr
 {-# INLINE foldrMWithKey #-}
 
 {-

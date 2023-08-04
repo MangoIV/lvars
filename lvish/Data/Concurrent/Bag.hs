@@ -1,29 +1,32 @@
-module Data.Concurrent.Bag(Bag, Token, new, put, remove, foreach) where
+module Data.Concurrent.Bag (Bag, Token, new, put, remove, foreach) where
 
 -- import           Control.Monad
 -- import           Control.Concurrent
-import qualified Data.IntMap      as M
-import           Data.IORef
-import           System.IO.Unsafe (unsafePerformIO)
+
+import Data.IORef
+import qualified Data.IntMap as M
+import System.IO.Unsafe (unsafePerformIO)
 
 ------------------------------------------------------------------------------
 -- A nonscalable implementation of a concurrent bag
 ------------------------------------------------------------------------------
 
-type UID     = Int
+type UID = Int
+
 type Token a = (Bag a, UID)
-type Bag a   = IORef (M.IntMap a)
+
+type Bag a = IORef (M.IntMap a)
 
 -- Return the old value.  Could replace with a true atomic op.
 atomicIncr :: IORef Int -> IO Int
-atomicIncr cntr = atomicModifyIORef' cntr (\c -> (c+1,c))
+atomicIncr cntr = atomicModifyIORef' cntr (\c -> (c + 1, c))
 
 {-# NOINLINE uidCntr #-}
 uidCntr :: IORef UID
 uidCntr = unsafePerformIO (newIORef 0)
 
 getUID :: IO UID
-getUID =  atomicIncr uidCntr
+getUID = atomicIncr uidCntr
 
 -- | Create an empty bag
 new :: IO (Bag a)

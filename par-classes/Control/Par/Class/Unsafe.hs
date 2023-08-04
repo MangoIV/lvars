@@ -1,14 +1,13 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE ConstraintKinds   #-}
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE KindSignatures    #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE Unsafe            #-}
-
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE Unsafe #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
@@ -16,12 +15,10 @@
 -- | Unsafe operations that end users should NOT import.
 --
 --   This is here only for other trusted implementation components.
-
 module Control.Par.Class.Unsafe
-  ( ParMonad(..)
+  ( ParMonad (..)
   , IdempotentParMonad
   , ParThreadSafe
-
   , SecretSuperClass
   )
 where
@@ -30,11 +27,9 @@ where
 import           Control.Applicative
 #endif
 
-import           Control.Par.EffectSigs
-
-import           Unsafe.Coerce          (unsafeCoerce)
-
-import           Control.Monad.IO.Class
+import Control.Monad.IO.Class
+import Control.Par.EffectSigs
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
 -- threads.
@@ -45,8 +40,9 @@ import           Control.Monad.IO.Class
 -- ALL Par monads should be a member of this class.  Unlike the former, the user
 -- should not be able to access the 'internalLiftIO' operation of this class from
 -- @Safe@ code.
-class (MonadIO (UnsafeParIO p)) =>
-      ParMonad (p :: EffectSig -> * -> * -> *)
+class
+  (MonadIO (UnsafeParIO p)) =>
+  ParMonad (p :: EffectSig -> * -> * -> *)
   where
   -- Public interface:
   ----------------------------------------
@@ -83,23 +79,21 @@ class (MonadIO (UnsafeParIO p)) =>
   dropToUnsafe :: p e s a -> UnsafeParIO p a
 
   -- | The inverse of 'dropToUnsafe'.
-  liftUnsafe   :: UnsafeParIO p a -> p e s a
-
+  liftUnsafe :: UnsafeParIO p a -> p e s a
 
 -- If we use this design for ParMonad, we suffer these orphan instances:
 -- (We cannot include Monad as a super-class of ParMonad, because it would
 --  have to universally quantify over 'e' and 's', which is not allowed.)
-instance ParMonad p => Monad (p e s) where
+instance (ParMonad p) => Monad (p e s) where
   (>>=) = pbind
   return = preturn
 
-instance ParMonad p => Functor (p e s) where
+instance (ParMonad p) => Functor (p e s) where
   fmap f p = pbind p (return . f)
 
-instance ParMonad p => Applicative (p e s) where
+instance (ParMonad p) => Applicative (p e s) where
   pure = preturn
   f <*> x = pbind f (\f' -> pbind x (return . f'))
-
 
 --------------------------------------------------------------------------------
 -- Empty classes, ParMonad
@@ -108,7 +102,7 @@ instance ParMonad p => Applicative (p e s) where
 -- classes which they should not be allowed to instance within the
 -- SafeHaskell-supporting subset of parallel programming
 -- functionality.
-class SecretSuperClass (p :: EffectSig -> * -> * -> *) where
+class SecretSuperClass (p :: EffectSig -> * -> * -> *)
 
 -- | This type class denotes the property that:
 --
@@ -118,8 +112,7 @@ class SecretSuperClass (p :: EffectSig -> * -> * -> *) where
 -- monad which implements *only* 'ParFuture' and/or 'ParIVar', would
 -- retain this property.  Conversely, any 'NonIdemParIVar' monad would
 -- violate the property.
-class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p where
-
+class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p
 
 -- | The class of Par monads in which all monadic actions are threadsafe and do not
 -- care which thread they execute on.  Thus, it is ok to inject additional parallelism.
@@ -127,6 +120,4 @@ class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p where
 -- Specifically, instances of ParThreadSafe must satisfy the law:
 --
 -- > (do m1; m2) == (do fork m1; m2)
---
-class (SecretSuperClass p, ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
-
+class (SecretSuperClass p, ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *)

@@ -1,99 +1,103 @@
-{-# LANGUAGE BangPatterns          #-}
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE Trustworthy           #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE TypeFamilies #-}
 
-{-|
-
-An I-structure (array) of /positive/ numbers.  A `NatArray` cannot store zeros.
-
-This particular implementation makes a trade-off between expressiveness (monomorphic
-in array contents) and efficiency.  The efficiency gained of course is that the array
-may be unboxed, and we don't need extra bits to store empty/full status.
-
-/However/, relative to "Data.LVar.IStructure", there is a performance disadvantage as
-well.  As of [2013.09.28] and their initial release, `NatArray`s are implemented as a
-/single/ `LVar`, which means they share a single wait-list of blocked computations.
-If there are many computations blocking on different elements within a `NatArray`,
-scalability will be much worse than with other `IStructure` implementations.
-
-The holy grail is to get unboxed arrays and scalable blocking, but we don't have this
-yet.
-
-Finally, note that this data-structure has an EXPERIMENTAL status and may be removed
-in future releases as we find better ways to support unboxed array structures with
-per-element synchronization.
-
--}
-
+-- |
+--
+-- An I-structure (array) of /positive/ numbers.  A `NatArray` cannot store zeros.
+--
+-- This particular implementation makes a trade-off between expressiveness (monomorphic
+-- in array contents) and efficiency.  The efficiency gained of course is that the array
+-- may be unboxed, and we don't need extra bits to store empty/full status.
+--
+-- /However/, relative to "Data.LVar.IStructure", there is a performance disadvantage as
+-- well.  As of [2013.09.28] and their initial release, `NatArray`s are implemented as a
+-- /single/ `LVar`, which means they share a single wait-list of blocked computations.
+-- If there are many computations blocking on different elements within a `NatArray`,
+-- scalability will be much worse than with other `IStructure` implementations.
+--
+-- The holy grail is to get unboxed arrays and scalable blocking, but we don't have this
+-- yet.
+--
+-- Finally, note that this data-structure has an EXPERIMENTAL status and may be removed
+-- in future releases as we find better ways to support unboxed array structures with
+-- per-element synchronization.
 module Data.LVar.NatArray
-       (
-         -- * Basic operations
-         NatArray,
-         newNatArray, put, get,
+  ( -- * Basic operations
+    NatArray
+  , newNatArray
+  , put
+  , get
 
-         -- * Iteration and callbacks
-         forEach, forEachHP
+    -- * Iteration and callbacks
+  , forEach
+  , forEachHP
+  -- -- * Quasi-deterministic operations
+  -- freezeSetAfter, withCallbacksThenFreeze, freezeSet,
 
-         -- -- * Quasi-deterministic operations
-         -- freezeSetAfter, withCallbacksThenFreeze, freezeSet,
+  -- -- * Higher-level derived operations
+  -- copy, traverseSet, traverseSet_, union, intersection,
+  -- cartesianProd, cartesianProds,
 
-         -- -- * Higher-level derived operations
-         -- copy, traverseSet, traverseSet_, union, intersection,
-         -- cartesianProd, cartesianProds,
-
-         -- -- * Alternate versions of derived ops that expose HandlerPools they create.
-         -- forEachHP, traverseSetHP, traverseSetHP_,
-         -- cartesianProdHP, cartesianProdsHP
-       ) where
+  -- -- * Alternate versions of derived ops that expose HandlerPools they create.
+  -- forEachHP, traverseSetHP, traverseSetHP_,
+  -- cartesianProdHP, cartesianProdsHP
+  )
+where
 
 -- import qualified Data.Vector.Unboxed as U
 -- import qualified Data.Vector.Unboxed.Mutable as M
 
-
-import           Data.LVar.NatArray.Unsafe
-
-import           Data.Bits                              ((.&.))
-import qualified Data.Bits.Atomic                       as B
-import qualified Data.Vector.Storable                   as U
-import qualified Data.Vector.Storable.Mutable           as M
-import           Foreign.ForeignPtr                     (newForeignPtr,
-                                                         withForeignPtr)
-import           Foreign.Marshal.Alloc                  (finalizerFree)
-import           Foreign.Marshal.MissingAlloc           (callocBytes)
-import qualified Foreign.Ptr                            as P
-import           Foreign.Storable                       (Storable, sizeOf)
-
-import           Control.Exception                      (throw)
-import           Control.Monad                          (void)
-import qualified Data.Foldable                          as F
-import           Data.IORef
-import           Data.LVar.Generic
-import qualified Data.LVar.IVar                         as IV
-import           Data.Maybe                             (fromMaybe)
-import qualified Data.Set                               as S
-import qualified Data.Traversable                       as T
-
-import           Control.LVish                          as LV hiding
-                                                              (addHandler, get,
-                                                               put)
-import           Control.LVish.DeepFrz.Internal         as DF
-import           Control.LVish.Internal                 as LI
-import           Control.LVish.Internal.SchedIdempotent (freezeLV,
-                                                         freezeLVAfter, getLV,
-                                                         liftIO, newLV, putLV)
+import Control.Exception (throw)
+import Control.LVish as LV hiding
+  ( addHandler
+  , get
+  , put
+  )
+import Control.LVish.DeepFrz.Internal as DF
+import Control.LVish.Internal as LI
+import Control.LVish.Internal.SchedIdempotent
+  ( freezeLV
+  , freezeLVAfter
+  , getLV
+  , liftIO
+  , newLV
+  , putLV
+  )
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import           Data.LVar.NatArray.Unsafe              (NatArray (..))
-import           System.IO.Unsafe                       (unsafeDupablePerformIO)
+import Control.Monad (void)
+import Data.Bits ((.&.))
+import qualified Data.Bits.Atomic as B
+import qualified Data.Foldable as F
+import Data.IORef
+import Data.LVar.Generic
+import qualified Data.LVar.IVar as IV
+import Data.LVar.NatArray.Unsafe
+import Data.LVar.NatArray.Unsafe (NatArray (..))
+import Data.Maybe (fromMaybe)
+import qualified Data.Set as S
+import qualified Data.Traversable as T
+import qualified Data.Vector.Storable as U
+import qualified Data.Vector.Storable.Mutable as M
+import Foreign.ForeignPtr
+  ( newForeignPtr
+  , withForeignPtr
+  )
+import Foreign.Marshal.Alloc (finalizerFree)
+import Foreign.Marshal.MissingAlloc (callocBytes)
+import qualified Foreign.Ptr as P
+import Foreign.Storable (Storable, sizeOf)
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
 ------------------------------------------------------------------------------
 -- Toggles
@@ -111,8 +115,11 @@ unNatArray (NatArray lv) = lv
 
 -- | Create a new, empty, monotonically growing 'NatArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
-newNatArray :: forall elt e s . (Storable elt, Num elt) =>
-                     Int -> Par e s (NatArray s elt)
+newNatArray
+  :: forall elt e s
+   . (Storable elt, Num elt)
+  => Int
+  -> Par e s (NatArray s elt)
 newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 #ifdef USE_CALLOC
   let bytes = sizeOf (undefined::elt) * len
@@ -127,10 +134,11 @@ newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 -- the array data.
 freezeNatArray :: (HasFreeze e, Storable a) => NatArray s a -> LV.Par e s (U.Vector a)
 freezeNatArray (NatArray lv) = do
---  freezeLV
---  U.unsafeFreeze (state lv))
+  --  freezeLV
+  --  U.unsafeFreeze (state lv))
   error "FINISHME -- freezeNatArray "
-  -- LI.liftIO $ U.unsafeFreeze (LI.state lv)
+
+-- LI.liftIO $ U.unsafeFreeze (LI.state lv)
 
 --------------------------------------------------------------------------------
 -- Instances:
@@ -156,107 +164,144 @@ fromNatArray (NatArray lv) = unsafeDupablePerformIO (readIORef (state lv))
 --------------------------------------------------------------------------------
 
 {-# INLINE forEachHP #-}
+
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the array, optionally enrolled in a handler pool.
-forEachHP :: (Storable a, Eq a, Num a) =>
-             Maybe HandlerPool           -- ^ pool to enroll in, if any
-          -> NatArray s a                -- ^ array to listen to
-          -> (Int -> a -> Par e s ())    -- ^ callback
-          -> Par e s ()
+forEachHP
+  :: (Storable a, Eq a, Num a)
+  => Maybe HandlerPool
+  -- ^ pool to enroll in, if any
+  -> NatArray s a
+  -- ^ array to listen to
+  -> (Int -> a -> Par e s ())
+  -- ^ callback
+  -> Par e s ()
 forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
-    L.addHandler hp lv globalCB deltaCB
-    return ()
-  where
-    deltaCB (ix,x) = return$ Just$ unWrapPar$ callb ix x
-    globalCB vec = unWrapPar$
-      -- FIXME / TODO: need a better (parallel) for loop:
-      forVec vec $ \ ix elm ->
-        -- FIXME: When it starts off, it is SPARSE... there must be a good way to
-        -- avoid testing each position for zero.
-        if elm == 0
+  L.addHandler hp lv globalCB deltaCB
+  return ()
+ where
+  deltaCB (ix, x) = return $ Just $ unWrapPar $ callb ix x
+  globalCB vec = unWrapPar $
+    -- FIXME / TODO: need a better (parallel) for loop:
+    forVec vec $ \ix elm ->
+      -- FIXME: When it starts off, it is SPARSE... there must be a good way to
+      -- avoid testing each position for zero.
+      if elm == 0
         then return ()
         else forkHP hp $ callb ix elm
 
 {-# INLINE forVec #-}
+
 -- | Simple for-each loops over vector elements.
-forVec :: Storable a =>
-          M.IOVector a -> (Int -> a -> Par e s ()) -> Par e s ()
+forVec
+  :: (Storable a)
+  => M.IOVector a
+  -> (Int -> a -> Par e s ())
+  -> Par e s ()
 forVec vec fn = loop 0
-  where
-    len = M.length vec
-    loop i | i == len = return ()
-           | otherwise = do elm <- LI.liftIO$ M.unsafeRead vec i
-                            fn i elm
-                            loop (i+1)
+ where
+  len = M.length vec
+  loop i
+    | i == len = return ()
+    | otherwise = do
+        elm <- LI.liftIO $ M.unsafeRead vec i
+        fn i elm
+        loop (i + 1)
 
 {-# INLINE forEach #-}
+
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set
-forEach :: (Num a, Storable a, Eq a) =>
-           NatArray s a -> (Int -> a -> Par e s ()) -> Par e s ()
+forEach
+  :: (Num a, Storable a, Eq a)
+  => NatArray s a
+  -> (Int -> a -> Par e s ())
+  -> Par e s ()
 forEach = forEachHP Nothing
 
-
 {-# INLINE put #-}
+
 -- | Put a single element in the array.  That slot must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
-put :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt, Show elt, HasPut e) =>
-       NatArray s elt -> Int -> elt -> Par e s ()
-put _ !ix 0 = throw (LVarSpecificExn$ "NatArray: violation!  Attempt to put zero to index: "++show ix)
-put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
-  where putter ix vec@(M.MVector _len fptr) =
-          withForeignPtr fptr $ \ ptr -> do
-            let offset = sizeOf (undefined::elt) * ix
-            -- ARG, if it weren't for the idempotency requirement we could use fetchAndAdd here:
-            -- orig <- B.fetchAndAdd (P.plusPtr ptr offset) elm
-            orig <- B.compareAndSwap (P.plusPtr ptr offset) 0 elm
-            case orig of
-              0 -> return (Just (ix, elm))
-              i | i == elm  -> return Nothing -- Allow repeated, equal puts.
-                | otherwise -> throw$ ConflictingPutExn$ "Multiple puts to index of a NatArray: "++
-                                     show ix++" new/old : "++show elm++"/"++show orig
+put
+  :: forall s e elt
+   . (Storable elt, B.AtomicBits elt, Num elt, Show elt, HasPut e)
+  => NatArray s elt
+  -> Int
+  -> elt
+  -> Par e s ()
+put _ !ix 0 = throw (LVarSpecificExn $ "NatArray: violation!  Attempt to put zero to index: " ++ show ix)
+put (NatArray (WrapLVar lv)) !ix !elm = WrapPar $ putLV lv (putter ix)
+ where
+  putter ix vec@(M.MVector _len fptr) =
+    withForeignPtr fptr $ \ptr -> do
+      let offset = sizeOf (undefined :: elt) * ix
+      -- ARG, if it weren't for the idempotency requirement we could use fetchAndAdd here:
+      -- orig <- B.fetchAndAdd (P.plusPtr ptr offset) elm
+      orig <- B.compareAndSwap (P.plusPtr ptr offset) 0 elm
+      case orig of
+        0 -> return (Just (ix, elm))
+        i
+          | i == elm -> return Nothing -- Allow repeated, equal puts.
+          | otherwise ->
+              throw $
+                ConflictingPutExn $
+                  "Multiple puts to index of a NatArray: "
+                    ++ show ix
+                    ++ " new/old : "
+                    ++ show elm
+                    ++ "/"
+                    ++ show orig
 
 {-# INLINE get #-}
+
 -- | Wait for an indexed entry to contain a non-zero value.
 --
 -- Warning: this is inefficient if it needs to block, because the deltaThresh must
 -- monitor EVERY new addition.
-get :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt, HasGet e) =>
-       NatArray s elt -> Int -> Par e s elt
-get (NatArray (WrapLVar lv)) !ix  = WrapPar $
+get
+  :: forall s e elt
+   . (Storable elt, B.AtomicBits elt, Num elt, HasGet e)
+  => NatArray s elt
+  -> Int
+  -> Par e s elt
+get (NatArray (WrapLVar lv)) !ix =
+  WrapPar $
     getLV lv globalThresh deltaThresh
-  where
-    globalThresh ref _frzn = do
-      elm <- M.read ref ix
-      if elm == 0
-        then return Nothing
-        else return (Just elm)
-    -- FIXME: we don't actually want to call the deltaThresh on every element...
-      -- We want more locality than that...
-    deltaThresh (ix2,e2) | ix == ix2 = return$! Just e2
-                         | otherwise = return Nothing
-
+ where
+  globalThresh ref _frzn = do
+    elm <- M.read ref ix
+    if elm == 0
+      then return Nothing
+      else return (Just elm)
+  -- FIXME: we don't actually want to call the deltaThresh on every element...
+  -- We want more locality than that...
+  deltaThresh (ix2, e2)
+    | ix == ix2 = return $! Just e2
+    | otherwise = return Nothing
 
 -- | A sequential for-loop with a catch.  The body of the loop gets access to a
 -- special get function.  This getter will not block subsequent iterations of the
 -- loop.  Parallelism will be introduced minimally, only as neccessary to avoid
 -- blocking.
-seqLoopNonblocking :: Int -> Int ->
-                     ((NatArray s elt -> Int -> Par e s elt) -> Int -> Par e s ()) ->
-                     Par e s ()
+seqLoopNonblocking
+  :: Int
+  -> Int
+  -> ((NatArray s elt -> Int -> Par e s elt) -> Int -> Par e s ())
+  -> Par e s ()
 seqLoopNonblocking start end fn = do
   error "TODO - FINISHME: seqLoopNonblocking optimization"
-  where
-    par =
-      L.Par $ \k -> L.ClosedPar $ \q -> do
-        -- tripped <- globalThresh state False
---        case tripped of
-  --        Just b -> exec (k b) q -- already past the threshold; invoke the
--- forkHP mh child = mkPar $ \k q -> do
---   closed <- closeInPool mh child
---   Sched.pushWork q (k ()) -- "Work-first" policy.
--- --  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp
---   exec closed q
+ where
+  par =
+    L.Par $ \k -> L.ClosedPar $ \q -> do
+      -- tripped <- globalThresh state False
+      --        case tripped of
+      --        Just b -> exec (k b) q -- already past the threshold; invoke the
+      -- forkHP mh child = mkPar $ \k q -> do
+      --   closed <- closeInPool mh child
+      --   Sched.pushWork q (k ()) -- "Work-first" policy.
+      -- --  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp
+      --   exec closed q
       undefined
 
 {-

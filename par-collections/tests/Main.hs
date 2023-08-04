@@ -2,32 +2,30 @@
 
 module Main (tests, main) where
 
-import           Control.LVish            as P
 -- import qualified Control.Par.Class as PC
-import           Control.Par.Class.Unsafe (ParMonad (internalLiftIO))
+
 -- import Control.LVish.Unsafe
 -- import Data.LVar.IVar as IV
-
-import           Data.Maybe               (fromMaybe)
-import           Data.Word
 
 -- import Control.Concurrent
 -- import Control.Monad.Trans
 
-import           Control.Exception        (evaluate)
-import           Control.Par.Class        as PC (Generator (..))
-import           Data.IORef
-import           Data.Par.Range
+import Control.Exception (evaluate)
+import Control.LVish as P
+import Control.Par.Class as PC (Generator (..))
+import Control.Par.Class.Unsafe (ParMonad (internalLiftIO))
 -- import qualified Control.Monad.Par as P -- This expects monad-par >= 0.3.4.6 with -fnewgeneric
-import qualified Data.Atomics.Counter     as C
-
+import qualified Data.Atomics.Counter as C
+import Data.IORef
+import Data.Maybe (fromMaybe)
+import Data.Par.Range
+import Data.Word
 -- import Data.List
---import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           Test.Tasty.TH            (testGroupGenerator)
-
-import           TestHelpers              (numElems, timeit)
+-- import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
+import Test.Tasty
+import Test.Tasty.HUnit
+import Test.Tasty.TH (testGroupGenerator)
+import TestHelpers (numElems, timeit)
 
 --------------------------------------------------------------------------------
 
@@ -37,27 +35,34 @@ size = fromMaybe 100 numElems
 -- Sum from 1..N
 expectedSum :: Word64
 expectedSum = (s * (s + 1)) `quot` 2
-  where s = fromIntegral size
+ where
+  s = fromIntegral size
 
 -- About 0.3s for 500M on a laptop:
 case_seqfold :: Assertion
 case_seqfold = do
-  assertEqual "Fold a range of ints" expectedSum =<<
-    (timeit $ evaluate $
-     fold (\ x y -> x + fromIntegral y) 0 $ irange 1 size)
+  assertEqual "Fold a range of ints" expectedSum
+    =<< ( timeit $
+            evaluate $
+              fold (\x y -> x + fromIntegral y) 0 $
+                irange 1 size
+        )
 
 -- About 0.44s for 500M ints on the same laptop.  That is -- it's slower.
 case_seqfoldM :: Assertion
 case_seqfoldM = do
-  assertEqual "Fold a range of ints in Par" expectedSum =<<
-    (timeit $ foldM (\ x y -> return $! x + fromIntegral y) 0 $ irange 1 size)
+  assertEqual "Fold a range of ints in Par" expectedSum
+    =<< (timeit $ foldM (\x y -> return $! x + fromIntegral y) 0 $ irange 1 size)
 
 -- Same thing in a different monad.  This gets about the same time 0.45s.
 case_seqfoldMP :: Assertion
 case_seqfoldMP = do
-  assertEqual "Fold a range of ints in IO" expectedSum =<<
-    (timeit $ P.runParNonDet $
-     foldMP (\ x y -> return $! x + fromIntegral y) 0 $ irange 1 size)
+  assertEqual "Fold a range of ints in IO" expectedSum
+    =<< ( timeit $
+            P.runParNonDet $
+              foldMP (\x y -> return $! x + fromIntegral y) 0 $
+                irange 1 size
+        )
 
 -- Runs at 0.3s for 500M if there's no work done in the body at all.  With an IORef
 -- Word (i.e. boxed), this is 10X slower, at 0.28s for 50M Switching to
@@ -72,22 +77,22 @@ case_seqfoldMP = do
 --   didn't make a difference here.
 case_seqfor1 :: Assertion
 case_seqfor1 = do
-  assertEqual "For loop over a range of ints" expectedSum =<<
-    (timeit $ do
-       cnt <- C.newCounter 0
-       PC.forM_ (irange 1 size) $ \ i -> do
-         x <- C.readCounter cnt
-         C.writeCounter cnt $! x + fromIntegral i
---         C.incrCounter (fromIntegral i) cnt
-         return ()
-       fmap fromIntegral $ C.readCounter cnt
-       -- cnt <- newIORef 0
-       -- PC.forM_ (irange 1 size) $ \ i -> do
-       --   x <- readIORef cnt
-       --   writeIORef cnt $! x + fromIntegral i
-       --   return ()
-       -- readIORef cnt
-    )
+  assertEqual "For loop over a range of ints" expectedSum
+    =<< ( timeit $ do
+            cnt <- C.newCounter 0
+            PC.forM_ (irange 1 size) $ \i -> do
+              x <- C.readCounter cnt
+              C.writeCounter cnt $! x + fromIntegral i
+              --         C.incrCounter (fromIntegral i) cnt
+              return ()
+            fmap fromIntegral $ C.readCounter cnt
+            -- cnt <- newIORef 0
+            -- PC.forM_ (irange 1 size) $ \ i -> do
+            --   x <- readIORef cnt
+            --   writeIORef cnt $! x + fromIntegral i
+            --   return ()
+            -- readIORef cnt
+        )
 
 -- Very slow currently [2013.12.07]: 5M in 0.37s, a full 100X worse.  Providing a
 -- custom definition of forMP_ for Ranges (rather than the default) got this down to
@@ -97,25 +102,25 @@ case_seqfor1 = do
 --   performance is the same as seqfor1.
 case_seqforMP1 :: Assertion
 case_seqforMP1 = do
-  assertEqual "For loop over a range of ints in Par monad" expectedSum =<<
-    (timeit $ P.runParNonDet $ do
-       cnt <- internalLiftIO $ C.newCounter 0
-       PC.forMP_ (irange 1 size) $ \ i -> do
-         x <- internalLiftIO$ C.readCounter cnt
-         internalLiftIO$ C.writeCounter cnt $! x + fromIntegral i
-         return ()
-       fmap fromIntegral $ internalLiftIO$ C.readCounter cnt
-    )
+  assertEqual "For loop over a range of ints in Par monad" expectedSum
+    =<< ( timeit $ P.runParNonDet $ do
+            cnt <- internalLiftIO $ C.newCounter 0
+            PC.forMP_ (irange 1 size) $ \i -> do
+              x <- internalLiftIO $ C.readCounter cnt
+              internalLiftIO $ C.writeCounter cnt $! x + fromIntegral i
+              return ()
+            fmap fromIntegral $ internalLiftIO $ C.readCounter cnt
+        )
 
 -- Do no work in this version, but run the loop in the par monad.
 -- This one is reasonable speed, 0.29s for 500M.
 case_seqforMP2 :: Assertion
 case_seqforMP2 = do
-  assertEqual "For loop over a range of ints in Par monad" () =<<
-    (timeit $ P.runParNonDet $ do
-       PC.forMP_ (irange 1 size) $ \ i ->
-         return ()
-    )
+  assertEqual "For loop over a range of ints in Par monad" ()
+    =<< ( timeit $ P.runParNonDet $ do
+            PC.forMP_ (irange 1 size) $ \i ->
+              return ()
+        )
 
 -- --------------------------------------------------------------------------------
 
@@ -124,4 +129,3 @@ tests = $(testGroupGenerator)
 
 main :: IO ()
 main = defaultMain tests
-

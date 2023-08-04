@@ -1,41 +1,45 @@
-Name:                test-par-collections
-Version:             1.1
-Synopsis:            Factored out test-suite from par-collections to break a cycle.
+name:          test-par-collections
+version:       1.1
+synopsis:
+  Factored out test-suite from par-collections to break a cycle.
 
-Cabal-version:       >=1.8
-Build-type:          Simple
+cabal-version: >=1.8
+build-type:    Simple
 
 -- Factoring this out breaks the cycle between the 'par-collections' and 'lvish' packages.
 
-Executable test-par-collections-dummy-executable
-  Main-is: Dummy.hs
-  Build-depends: base
+executable test-par-collections-dummy-executable
+  main-is:       Dummy.hs
+  build-depends: base
 
-Test-suite test-par-collections
-  Type: exitcode-stdio-1.0
+test-suite test-par-collections
+  type:           exitcode-stdio-1.0
   hs-source-dirs: ./
-  Main-is: Main.hs
+  main-is:        Main.hs
+
   -- Build depends that are used directly by the test files, including:
   -- (1) Self dependency:
-  Build-depends: par-collections
+  build-depends:  par-collections
+
   -- (2) Dependencies common to test files and the library:
-  Build-depends: base >= 4 && < 5
-               , time >= 1.4
-               , par-classes >= 1.1
-               , atomic-primops >= 0.6
+  build-depends:
+      atomic-primops  >=0.6
+    , base            >=4   && <5
+    , par-classes     >=1.1
+    , time            >=1.4
 
   -- (3) Additional depends to test concrete instances:
-  Build-depends: lvish  >= 2.0
+  build-depends:  lvish >=2.0
 
   -- (4) Additional build depends for testing:
-  Build-depends: HUnit
-               , tasty >= 0.10
-               , tasty-hunit
-               , tasty-quickcheck
-               , tasty-th
-               , QuickCheck
-               , HUnit
-               , time
-               , text
+  build-depends:
+      HUnit
+    , QuickCheck
+    , tasty             >=0.10
+    , tasty-hunit
+    , tasty-quickcheck
+    , tasty-th
+    , text
+    , time
 
-  ghc-options: -O2 -threaded -rtsopts -Wall
+  ghc-options:    -O2 -threaded -rtsopts -Wall

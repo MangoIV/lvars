@@ -38,64 +38,65 @@
 -- setting it to the value 1.  See the paper for details on why a protocol like
 -- this is needed (the paper uses a more complex, lock-free protocol).  Such a
 -- protocol is *not* needed for @depart@, however.
-
 module Data.Concurrent.SNZI where
 
-import           Control.Monad
-import           Data.Atomics
-import           Data.Concurrent.AlignedIORef
-import           Data.Concurrent.Internal.Reagent
-import           Data.IORef
-import           GHC.Conc
+import Control.Monad
+import Data.Atomics
+import Data.Concurrent.AlignedIORef
+import Data.Concurrent.Internal.Reagent
+import Data.IORef
+import GHC.Conc
 
 -- | An entry point for a shared SNZI value
-data SNZI =
-    Child (AlignedIORef Int) SNZI
-  | Root  (AlignedIORef Int)
+data SNZI
+  = Child (AlignedIORef Int) SNZI
+  | Root (AlignedIORef Int)
 
 -- | Signal the presence of a thread at a SNZI
 arrive :: SNZI -> IO ()
-arrive (Root cnt) = react $ atomicUpdate_ (ref cnt) (+1)
+arrive (Root cnt) = react $ atomicUpdate_ (ref cnt) (+ 1)
 arrive (Child cnt parent) =
-  let upd 0    = Just (-1, True)
+  let upd 0 = Just (-1, True)
       upd (-1) = Nothing
-      upd n    = Just (n+1, False)
-  in do
-    tellParent <- react $ atomicUpdate (ref cnt) upd
-    when tellParent $ do
-      arrive parent
-      writeBarrier
-      writeIORef (ref cnt) 1
+      upd n = Just (n + 1, False)
+   in do
+        tellParent <- react $ atomicUpdate (ref cnt) upd
+        when tellParent $ do
+          arrive parent
+          writeBarrier
+          writeIORef (ref cnt) 1
 
 data TellParent = Yes | No | Err
 
 -- | Signal the departure of a thread at a SNZI.  IMPORTANT: depart MUST NOT be
 -- called more times than arrive for a given SNZI value.
 depart :: SNZI -> IO ()
-depart (Root cnt) = react $ atomicUpdate_ (ref cnt) (\x -> x-1)
+depart (Root cnt) = react $ atomicUpdate_ (ref cnt) (\x -> x - 1)
 depart (Child cnt parent) =
-  let upd 0    = Just (0, Err)
+  let upd 0 = Just (0, Err)
       upd (-1) = Nothing
-      upd 1    = Just (0,   Yes)
-      upd n    = Just (n-1, No)
-  in do
-    tellParent <- react $ atomicUpdate (ref cnt) upd
-    case tellParent of
-      No  -> return ()
-      Yes -> depart parent
-      Err -> do putStrLn "SNZI BUG: departs outnumber arrives"
-                error "SNZI BUG: departs outnumber arrives"
+      upd 1 = Just (0, Yes)
+      upd n = Just (n - 1, No)
+   in do
+        tellParent <- react $ atomicUpdate (ref cnt) upd
+        case tellParent of
+          No -> return ()
+          Yes -> depart parent
+          Err -> do
+            putStrLn "SNZI BUG: departs outnumber arrives"
+            error "SNZI BUG: departs outnumber arrives"
 
 -- Helper function to generate a tree of SNZI values.
 makeTree :: Int -> [SNZI] -> [SNZI] -> IO [SNZI]
 makeTree n parents children =
-  if n >= numCapabilities then return children
-  else case parents of
-    [] -> makeTree 0 children []
-    (parent:parents') -> do
-      c1 <- newAlignedIORef 0
-      c2 <- newAlignedIORef 0
-      makeTree (n+2) parents' $ Child c1 parent : Child c2 parent : children
+  if n >= numCapabilities
+    then return children
+    else case parents of
+      [] -> makeTree 0 children []
+      (parent : parents') -> do
+        c1 <- newAlignedIORef 0
+        c2 <- newAlignedIORef 0
+        makeTree (n + 2) parents' $ Child c1 parent : Child c2 parent : children
 
 -- | Create a shared SNZI values with numCapabilities number of entry points,
 -- together with a polling action that returns "true" when no threads are
@@ -103,5 +104,5 @@ makeTree n parents children =
 newSNZI :: IO ([SNZI], IO Bool)
 newSNZI = do
   rootRef <- newAlignedIORef 0
-  leaves  <- makeTree 1 [] [Root rootRef]
+  leaves <- makeTree 1 [] [Root rootRef]
   return (leaves, readIORef (ref rootRef) >>= return . (== 0))

@@ -1,39 +1,41 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- | Tests for SNZI data structure.
 module SkipListTests where
 
-import           Test.Tasty                             (TestTree, defaultMain,
-                                                         testGroup)
-import           Test.Tasty.HUnit
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
-import           Test.Tasty.TH                          (testGroupGenerator)
 
---import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import           Control.Concurrent
-import           Control.Monad
-import           GHC.Conc
-
-import           Control.LVish.Internal.SchedIdempotent (dbgLvl,
-                                                         forkWithExceptions,
-                                                         liftIO)
-import           Data.IORef
-import           Data.Word
-import           System.Random                          (mkStdGen, random)
+-- import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Control.Concurrent
+import Control.LVish.Internal.SchedIdempotent
+  ( dbgLvl
+  , forkWithExceptions
+  , liftIO
+  )
+import Control.Monad
 -- import Control.LVish  (logDbgLn_)
-import qualified Data.Concurrent.LinkedMap              as LM
-import qualified Data.Concurrent.SkipListMap            as SLM
-
-import           Debug.Trace
-
-import           TestHelpers                            as T
+import qualified Data.Concurrent.LinkedMap as LM
+import qualified Data.Concurrent.SkipListMap as SLM
+import Data.IORef
+import Data.Word
+import Debug.Trace
+import GHC.Conc
+import System.Random (mkStdGen, random)
+import Test.Tasty
+  ( TestTree
+  , defaultMain
+  , testGroup
+  )
+import Test.Tasty.HUnit
+import Test.Tasty.TH (testGroupGenerator)
+import TestHelpers as T
 
 -- FIXME: need an efficient way to extract the logger and capture it in the callbacks:
 logDbgLn_ _ _ = return ()
@@ -45,27 +47,29 @@ logDbgLn_ _ _ = return ()
 -- A number of insertions to test that is reasonable.
 mediumSize :: Int
 mediumSize =
-  trace ("Setting size for SkipListTests to "++show x) x
-  where x = case numElems of
-               Just x  -> x
-               Nothing -> 1000
+  trace ("Setting size for SkipListTests to " ++ show x) x
+ where
+  x = case numElems of
+    Just x -> x
+    Nothing -> 1000
 
 expectedSum :: Word64
 expectedSum = (s * (s + 1)) `quot` 2
-  where s = fromIntegral mediumSize
+ where
+  s = fromIntegral mediumSize
 
 -- | An additional check to apply to any SLMs we generate.
 sliceCheck :: (Ord k, Show k, Show v) => SLM.SLMap k v -> IO ()
 sliceCheck slm = do
   let sl1 = SLM.toSlice slm
   sz1 <- SLM.sliceSize sl1
-  Just (sl2,sl3) <- SLM.splitSlice sl1
+  Just (sl2, sl3) <- SLM.splitSlice sl1
   dbg1 <- SLM.debugShow sl2
   dbg2 <- SLM.debugShow sl3
   sz2 <- SLM.sliceSize sl2
   sz3 <- SLM.sliceSize sl3
-  logDbgLn_ 5 $ "HALF 1, sz "++ show sz2++":\n"++dbg1
-  logDbgLn_ 5 $ "HALF 2, sz "++ show sz3++":\n"++dbg2
+  logDbgLn_ 5 $ "HALF 1, sz " ++ show sz2 ++ ":\n" ++ dbg1
+  logDbgLn_ 5 $ "HALF 2, sz " ++ show sz3 ++ ":\n" ++ dbg2
   assertEqual "Splitting conserved size: " sz1 (sz2 + sz3)
   return ()
 
@@ -83,21 +87,22 @@ lm1 = do
   LM.Found s1 <- LM.find lm 1
   LM.Found s0 <- LM.find lm 0
   return $ s1 ++ s0
+
 case_lm1 :: Assertion
 case_lm1 = lm1 >>= assertEqual "test sequential insertion for LinkedMap" "Hello World"
 
-halveTest :: (Show k, Show v, Ord k, Eq v) => Maybe k -> [(k,v)] -> IO ()
+halveTest :: (Show k, Show v, Ord k, Eq v) => Maybe k -> [(k, v)] -> IO ()
 halveTest mend ls = do
-  lm  <- LM.fromList ls
+  lm <- LM.fromList ls
   res <- LM.halve' mend lm
   let capit = case mend of
-                Nothing  -> id
-                Just end -> filter ((< end) . fst)
+        Nothing -> id
+        Just end -> filter ((< end) . fst)
       ls' = capit ls
---  printLog
+  --  printLog
   case res of
     Nothing -> assertBool "un-halvable things should be size 0 or 1" (length ls' <= 1)
-    Just (l,r) -> do
+    Just (l, r) -> do
       l' <- LM.toList l
       r' <- LM.toList r
       let r'' = capit r'
@@ -106,19 +111,27 @@ halveTest mend ls = do
       assertEqual "Halving and joining should yield original" ls' (l' ++ r'')
 
 case_halveTest01 :: Assertion
-case_halveTest01 = halveTest Nothing (zip [0] ['a'..])
-case_halveTest02 = halveTest Nothing (zip [0,1] ['a'..])
-case_halveTest03 = halveTest Nothing (zip [0,1,2] ['a'..])
-case_halveTest04 = halveTest Nothing (zip [0..3] ['a'..])
-case_halveTest05 = halveTest Nothing (zip [0..10] ['a'..])
-case_halveTest06 = halveTest Nothing (zip [0..100] ['a'..])
+case_halveTest01 = halveTest Nothing (zip [0] ['a' ..])
 
-case_halveTest07 = halveTest (Just 1) (zip [0,1] ['a'..])
-case_halveTest08 = halveTest (Just 2) (zip [0,1,2] ['a'..])
-case_halveTest09 = halveTest (Just 2) (zip [0..3] ['a'..])
-case_halveTest10 = halveTest (Just 7) (zip [0..10] ['a'..])
-case_halveTest11 = halveTest (Just 91) (zip [0..100] ['a'..])
+case_halveTest02 = halveTest Nothing (zip [0, 1] ['a' ..])
 
+case_halveTest03 = halveTest Nothing (zip [0, 1, 2] ['a' ..])
+
+case_halveTest04 = halveTest Nothing (zip [0 .. 3] ['a' ..])
+
+case_halveTest05 = halveTest Nothing (zip [0 .. 10] ['a' ..])
+
+case_halveTest06 = halveTest Nothing (zip [0 .. 100] ['a' ..])
+
+case_halveTest07 = halveTest (Just 1) (zip [0, 1] ['a' ..])
+
+case_halveTest08 = halveTest (Just 2) (zip [0, 1, 2] ['a' ..])
+
+case_halveTest09 = halveTest (Just 2) (zip [0 .. 3] ['a' ..])
+
+case_halveTest10 = halveTest (Just 7) (zip [0 .. 10] ['a' ..])
+
+case_halveTest11 = halveTest (Just 91) (zip [0 .. 100] ['a' ..])
 
 --------------------------------------------------------------------------------
 -- Tests for concurrent SkipLists
@@ -143,7 +156,7 @@ case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "He
 fillOne :: [(Int, Int)] -> IO (SLM.SLMap Int Int)
 fillOne chunks = do
   slm <- SLM.newSLMap 10
-  mvars <- forM chunks $ \ (start,end) -> do
+  mvars <- forM chunks $ \(start, end) -> do
     mv <- newEmptyMVar
     forkWithExceptions forkIO "slm2 test thread" $ do
       rgen <- newIORef $ mkStdGen 0
@@ -152,7 +165,7 @@ fillOne chunks = do
             let (b, g') = random g
             writeIORef rgen $! g'
             return b
-      T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
+      T.for_ (start, end) $ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
       putMVar mv ()
     return mv
   forM_ mvars takeMVar
@@ -160,30 +173,34 @@ fillOne chunks = do
 
 insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
 insertionTest chunks = do
-  slm <- timeit$ fillOne chunks
+  slm <- timeit $ fillOne chunks
   -- End timing.  Timing just the insertion phase.
   cs <- SLM.counts slm
   logDbgLn_ 1 $ "After insertions, counts: " ++ show cs
   sliceCheck slm
   matches <- SLM.foldlWithKey id (\b k v -> if k == v then return b else return False) True slm
-  summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
---  printLog
+  summed <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
+  --  printLog
   return (matches, summed)
+
 --  Just n <- SLM.find slm (slm2Count/2)  -- test find function
 --  return n
 
 -- Concurrent insertion of the same values:
 slm2 :: IO (Bool, Word64)
-slm2 = insertionTest (replicate numCapabilities (1,mediumSize))
+slm2 = insertionTest (replicate numCapabilities (1, mediumSize))
+
 case_slm2 :: Assertion
 case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap (#2)" (True, expectedSum)
 
 -- Same, but in the opposite order:
 -- Takes much longer (in parallel)!! Why?
 slm3 :: IO (Bool, Word64)
-slm3 = insertionTest (replicate numCapabilities (mediumSize,1))
+slm3 = insertionTest (replicate numCapabilities (mediumSize, 1))
+
 case_slm3 :: Assertion
 case_slm3 = slm3 >>= assertEqual "test concurrent insertion for SkipListMap (#3)" (True, expectedSum)
+
 -- Aaron doesn't know anything about the algorithm that would be biased on insertion order.
 -- Theories: Perhaps this is distributing failure across different threads in a more uniform way?
 -- This sort of test is vulnerable to chaotic thread scheduling conditions.
@@ -193,12 +210,11 @@ case_slm3 = slm3 >>= assertEqual "test concurrent insertion for SkipListMap (#3)
 
 -- TODO: randomized insertions... more orderings.  Add work gradually.
 
-
 slm4 :: IO (Bool, Word64)
-slm4 = insertionTest (splitRange numCapabilities (1,mediumSize))
+slm4 = insertionTest (splitRange numCapabilities (1, mediumSize))
+
 case_slm4 :: Assertion
 case_slm4 = slm4 >>= assertEqual "test concurrent insertion for SkipListMap (#4)" (True, expectedSum)
-
 
 --------------------------------------------------------------------------------
 
@@ -207,7 +223,6 @@ tests = $(testGroupGenerator)
 
 runTests :: IO ()
 runTests = defaultMain tests
-
 
 {-
 Development notes:

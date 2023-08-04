@@ -39,8 +39,8 @@
 
               # hlint obviously fails
               hlint.enable = false;
-              # stylish-haskell cannot parse the project
-              stylish-haskell.enable = false;
+              cabal-fmt.enable = true;
+              fourmolu.enable = true;
             };
           };
         };

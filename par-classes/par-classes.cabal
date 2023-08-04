@@ -1,14 +1,16 @@
-Name:                par-classes
-Version:             1.2
-Synopsis:            Type classes providing a general interface to various @Par@ monads.
+name:               par-classes
+version:            1.2
+synopsis:
+  Type classes providing a general interface to various @Par@ monads.
 
 -- Version history:
 --  1.0      : Replacing old 'abstract-par' package with this new, extended version.
 --  1.0.1    : Add Data.Splittable
 --  1.1      : Add EffectSigs
 --  1.2      : Add Control.Par.Sparks
-    
-Description: A @Par@ monad offers a parallel programming API based on
+
+description:
+  A @Par@ monad offers a parallel programming API based on
   dataflow programming.  This package offers classes abstracting over
   Par monads.  These classes separate different levels of @Par@
   functionality.  See the "Control.Par.Class" module for more details.
@@ -17,40 +19,38 @@ Description: A @Par@ monad offers a parallel programming API based on
   @monad-par@ packages, as well as the limited reference
   implementation, found in `Control.Par.Sparks`.
 
-  
-Homepage:            https://github.com/iu-parfunc/lvars
-License:             BSD3
-License-file:        LICENSE
-Author:              Ryan Newton
-Maintainer:          Ryan Newton <rrnewton@gmail.com>
-Copyright:           (c) Ryan Newton 2011-2012
-Stability:           Experimental
-Category:            Control,Parallelism,Monads
-Build-type:          Simple
-Cabal-version:       >=1.8
-
+homepage:           https://github.com/iu-parfunc/lvars
+license:            BSD3
+license-file:       LICENSE
+author:             Ryan Newton
+maintainer:         Ryan Newton <rrnewton@gmail.com>
+copyright:          (c) Ryan Newton 2011-2012
+stability:          Experimental
+category:           Control,Parallelism,Monads
+build-type:         Simple
+cabal-version:      >=1.8
 extra-source-files:
 
-Source-repository head
+source-repository head
   type:     git
   location: https://github.com/iu-parfunc/lvars
   subdir:   haskell/par-classes
 
+library
+  exposed-modules:
+    Control.Par.Class
+    Control.Par.Class.Unsafe
+    Control.Par.EffectSigs
+    Data.Splittable.Class
 
-Library
-  Exposed-modules:
-           -- Classes generalizing different levels of monad-par functionality:
-           Control.Par.Class
-           Control.Par.Class.Unsafe
-           -- Control.Par.Sparks                  
-           Control.Par.EffectSigs
-           Data.Splittable.Class
-           
+  -- Classes generalizing different levels of monad-par functionality:
+  -- Control.Par.Sparks                  
   -- This needs to stay low-dependencies!!  Interfaces only.
-  Build-depends: base >= 4.7 && < 5
-               , deepseq >= 1.1
-               , ghc-prim >= 0.3
-               , transformers
-               , parallel 
+  build-depends:
+      base          >=4.7 && <5
+    , deepseq       >=1.1
+    , ghc-prim      >=0.3
+    , parallel
+    , transformers
 
-  ghc-options: -Wall -fno-warn-orphans
+  ghc-options:     -Wall -fno-warn-orphans

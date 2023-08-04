@@ -1,33 +1,29 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
+-- \| A restricted sub-language for writing ONLY monotonic computations.
+
 -- | EXPERIMENTAL
+module Monotonic where
 
--- | A restricted sub-language for writing ONLY monotonic computations.
+-- Control.LVish.Monotonic
 
-module Monotonic
-       -- Control.LVish.Monotonic
-       where
-
-import           Control.DeepSeq
-
-import qualified Control.LVish     as L
-import qualified Data.LVar.IVar    as I
+import Classes
+import Control.DeepSeq
+import qualified Control.LVish as L
+import Data.IORef
+import qualified Data.LVar.IVar as I
 import qualified Data.LVar.PureSet as S
+import qualified Data.Set as Set
+import Data.Word
 
-import           Classes
-
-import           Data.IORef
-import qualified Data.Set          as Set
-import           Data.Word
 --------------------------------------------------------------------------------
-
 
 -- | A value used in a monotonic computation.
 newtype Mono a = Mono a
 
 -- | A monotonic, parallel computation with side effects.
-newtype MPar a = MPar { unMPar :: L.Par a }
-  deriving (Monad )
+newtype MPar a = MPar {unMPar :: L.Par a}
+  deriving (Monad)
 
 -- We can't lift the raw LVar ops, since they are unsafe anyway!
 -- putLV :: LVar a d -> (Mono a -> IO (Maybe d)) -> Par ()
@@ -36,8 +32,8 @@ newtype MPar a = MPar { unMPar :: L.Par a }
 -- Lifted IVar ops:
 
 -- Oops, wait, this won't work!  This only makes sense for counters, not ivars...
-put_ :: Eq a => I.IVar a -> Mono a -> MPar ()
-put_ i (Mono a) = MPar$ I.put_ i a
+put_ :: (Eq a) => I.IVar a -> Mono a -> MPar ()
+put_ i (Mono a) = MPar $ I.put_ i a
 
 get :: I.IVar a -> MPar (Mono a)
 get = MPar . fmap Mono . I.get
@@ -45,7 +41,7 @@ get = MPar . fmap Mono . I.get
 ----------------------------------------
 -- Lifted Set ops:
 
-putInSet :: Ord a => Mono a -> S.ISet a -> MPar ()
+putInSet :: (Ord a) => Mono a -> S.ISet a -> MPar ()
 putInSet (Mono a) set = MPar $ S.insert a set
 
 -- By using monotonic callbacks we can guarantee that premature freezes can be rerun
@@ -60,15 +56,17 @@ setForeach = undefined
 -- careful we only run a monotonic computation on the snapshot.  Any side effects it
 -- have must *increase* if it is passed a larger snapshot.  If there is a put AFTER
 -- this freeze, the monotonic callback can simply be rerun.
-speculateFrozen :: (LVishData1 f) =>
-                   f a -> (Mono (Snapshot f a) -> MPar ()) -> L.Par ()
+speculateFrozen
+  :: (LVishData1 f)
+  => f a
+  -> (Mono (Snapshot f a) -> MPar ())
+  -> L.Par ()
 -- speculateFrozen :: (LVishData1 f, LVishData1 g) =>
 --                    f a -> (Mono (Snapshot f a) -> MPar (g b)) -> L.Par (g b)
 speculateFrozen = error "finishme -speculateFrozen"
 
 -- FIXME: What prevents bad combinations such as a monotonically shrinking set with a
 -- monotonically growing set?
-
 
 --------------------------------------------------------------------------------
 -- Can we enable a limited form of monotonic math?
@@ -88,17 +86,17 @@ setSum = undefined
 setSize :: Mono (Snapshot S.ISet Word) -> Mono Word
 setSize (Mono s) = Mono $ fromIntegral $ Set.size s
 
-mconst :: Num a => a -> Mono a
+mconst :: (Num a) => a -> Mono a
 mconst = Mono
 
 example :: L.Par ()
 example = do
   s1 <- S.newEmptySet
   s2 <- S.newEmptySet
-  mapM_ (\n -> L.fork $ S.insert n s1) [1..10::Word]
+  mapM_ (\n -> L.fork $ S.insert n s1) [1 .. 10 :: Word]
   -- sync here if desired...
-  speculateFrozen s1 $ \ snap -> do
-    setForeach snap  $ \ elem -> do
+  speculateFrozen s1 $ \snap -> do
+    setForeach snap $ \elem -> do
       putInSet (elem `mul` mconst 10) s2
   return ()
 
@@ -107,16 +105,16 @@ example2 = do
   s1 <- S.newEmptySet
   sz <- newCounter
   sm <- newCounter
-  mapM_ (\n -> L.fork $ S.insert n s1) [1..10::Word]
+  mapM_ (\n -> L.fork $ S.insert n s1) [1 .. 10 :: Word]
   -- sync here if desired...
-  speculateFrozen s1 $ \ snap -> do
-    setForeach snap  $ \ elem -> do
+  speculateFrozen s1 $ \snap -> do
+    setForeach snap $ \elem -> do
       setCounter sz (setSize snap)
-      setCounter sm (setSum  snap)
+      setCounter sm (setSum snap)
   return sm
 
-
 newtype Counter = Counter (L.LVar (IORef Word) ())
+
 newCounter :: L.Par Counter
 newCounter = undefined
 
@@ -125,4 +123,3 @@ setCounter = undefined
 
 freezeCounter :: Counter -> L.Par Word
 freezeCounter = undefined
-

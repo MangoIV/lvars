@@ -1,40 +1,37 @@
-{-# LANGUAGE Unsafe              #-}
-
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE TypeFamilies        #-}
-
-{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE Unsafe #-}
 
 module Data.LVar.PureMap.Unsafe
-       (
-         -- * Unsafe operations:
-         unsafePeekKey,
---         unsafeGetOrInit, unsafeInsertIfAbsent,
+  ( -- * Unsafe operations:
+    unsafePeekKey
+  --         unsafeGetOrInit, unsafeInsertIfAbsent,
 
-         -- * These are here only to reexport downstream:
-         IMap(..), forEachHP, fromIMap
-       )
-       where
+    -- * These are here only to reexport downstream:
+  , IMap (..)
+  , forEachHP
+  , fromIMap
+  )
+where
 
-import           Control.LVish                          hiding (parIO)
-import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.Internal                 as LI
-import           Control.LVish.Internal.SchedIdempotent (freezeLV)
+import Control.LVish hiding (parIO)
+import Control.LVish.DeepFrz.Internal
+import Control.LVish.Internal as LI
+import Control.LVish.Internal.SchedIdempotent (freezeLV)
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import           Data.LVar.Generic                      as G
-import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
-import           Data.UtilInternal                      (traverseWithKey_)
-
 -- import           Control.Applicative ((<$>))
-import qualified Control.Par.Class                      as PC
-import qualified Data.Foldable                          as F
-import           Data.IORef
-import           Data.List                              (intersperse)
-import qualified Data.Map.Strict                        as M
-import           System.IO.Unsafe                       (unsafeDupablePerformIO)
-
-import           Data.Par.Map                           ()
+import qualified Control.Par.Class as PC
+import qualified Data.Foldable as F
+import Data.IORef
+import Data.LVar.Generic as G
+import Data.LVar.Generic.Internal (unsafeCoerceLVar)
+import Data.List (intersperse)
+import qualified Data.Map.Strict as M
+import Data.Par.Map ()
+import Data.UtilInternal (traverseWithKey_)
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
@@ -46,7 +43,7 @@ import           Data.Par.Map                           ()
 --
 -- Performance note: There is only /one/ mutable location in this implementation.  Thus
 -- it is not a scalable implementation.
-newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k,v))
+newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k, v))
 
 -- | Equality is physical equality, as with @IORef@s.
 instance Eq (IMap k s v) where
@@ -55,10 +52,11 @@ instance Eq (IMap k s v) where
 -- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 (IMap k) where
-  freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
+  freeze orig@(IMap (WrapLVar lv)) = WrapPar $ do freezeLV lv; return (unsafeCoerceLVar orig)
+
   -- Unlike the Map-specific forEach variants, this takes only values, not keys.
-  addHandler mh mp fn = forEachHP mh mp (\ _k v -> fn v)
-  sortFrzn (IMap lv) = AFoldable$ unsafeDupablePerformIO (readIORef (state lv))
+  addHandler mh mp fn = forEachHP mh mp (\_k v -> fn v)
+  sortFrzn (IMap lv) = AFoldable $ unsafeDupablePerformIO (readIORef (state lv))
 
 -- | The `IMap`s in this module also have the special property that they support an
 -- /O(1)/ freeze operation which immediately yields a `Foldable` container
@@ -71,8 +69,8 @@ instance OrderedLVarData1 (IMap k) where
 -- `Trvrsbl`.
 instance F.Foldable (IMap k Frzn) where
   foldr fn zer (IMap lv) =
-    let set = unsafeDupablePerformIO (readIORef (state lv)) in
-    F.foldr fn zer set
+    let set = unsafeDupablePerformIO (readIORef (state lv))
+     in F.foldr fn zer set
 
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IMap k Trvrsbl) where
@@ -81,80 +79,88 @@ instance F.Foldable (IMap k Trvrsbl) where
 -- `IMap` values can be returned as the result of a
 --  `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
 --  @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
-instance DeepFrz a => DeepFrz (IMap k s a) where
+instance (DeepFrz a) => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap lv) =
-    let mp' = unsafeDupablePerformIO (readIORef (state lv)) in
-    "{IMap: " ++
-    (concat $ intersperse ", " $ map show $
-     M.toList mp') ++ "}"
+    let mp' = unsafeDupablePerformIO (readIORef (state lv))
+     in "{IMap: "
+          ++ ( concat $
+                intersperse ", " $
+                  map show $
+                    M.toList mp'
+             )
+          ++ "}"
 
 -- | For convenience only; the user could define this.
 instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
   show lv = show (castFrzn lv)
 
-
 -- | Add an (asynchronous) callback that listens for all new key/value pairs added to
 -- the map, optionally enrolled in a handler pool.
-forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
-          -> IMap k s v                  -- ^ Map to listen to
-          -> (k -> v -> Par e s ())      -- ^ callback
-          -> Par e s ()
+forEachHP
+  :: Maybe HandlerPool
+  -- ^ optional pool to enroll in
+  -> IMap k s v
+  -- ^ Map to listen to
+  -> (k -> v -> Par e s ())
+  -- ^ callback
+  -> Par e s ()
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
-    L.addHandler mh lv globalCB deltaCB
-    return ()
-  where
-    -- FIXME: require idempotence or make sure this does NOT launch
-    -- repeated callbacks for the same key:
-    deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
-    globalCB ref unlockMap = do
-      mp <- L.liftIO $ readIORef ref -- Snapshot
-      L.liftIO unlockMap -- Pure can unlock early.
-      unWrapPar $
-        traverseWithKey_ (\ k v -> forkHP mh$ callb k v) mp
+  L.addHandler mh lv globalCB deltaCB
+  return ()
+ where
+  -- FIXME: require idempotence or make sure this does NOT launch
+  -- repeated callbacks for the same key:
+  deltaCB (k, v) = return $ Just $ unWrapPar $ callb k v
+  globalCB ref unlockMap = do
+    mp <- L.liftIO $ readIORef ref -- Snapshot
+    L.liftIO unlockMap -- Pure can unlock early.
+    unWrapPar $
+      traverseWithKey_ (\k v -> forkHP mh $ callb k v) mp
 
 ------------------------------------------------------------------------------
 
-
 -- | An unsafe, nonblocking version of `getKey`.  This reveals whether
-unsafePeekKey :: Ord k => k -> IMap k s v -> Par e s (Maybe v)
+unsafePeekKey :: (Ord k) => k -> IMap k s v -> Par e s (Maybe v)
 unsafePeekKey key (IMap (WrapLVar lv)) = do
-    mp <- liftIO$ readIORef (L.state lv)
-    return$! M.lookup key mp
+  mp <- liftIO $ readIORef (L.state lv)
+  return $! M.lookup key mp
 
 -- | A generic initialize proceedure that returns a preexisting value, if it exists,
 -- otherwise filling in a new "bottom" value and returning it.
 --
 -- The boolean return value is @True@ iff a new, fresh entry was created.
-_unsafeGetOrInit :: forall f a e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
-          key -- ^ The key to lookup or populate.
-          -> IMap key s (f s a)
-          -> Par e s (Bool, f s a)
+_unsafeGetOrInit
+  :: forall f a e s key
+   . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a)
+  => key
+  -- ^ The key to lookup or populate.
+  -> IMap key s (f s a)
+  -> Par e s (Bool, f s a)
 _unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
  where
   -- go1 is OPTIONAL optimization.  Could skip right to go2.
   -- The tension here is that we can't do IO during an atomicModifyIORef.
   go1 = do
     let mpref = (L.state lv)
-    mp <- liftIO$ readIORef mpref
+    mp <- liftIO $ readIORef mpref
     case M.lookup key mp of
-      Just x  -> return (False,x)
+      Just x -> return (False, x)
       Nothing -> go2
   go2 = do
-           bot <- G.newBottom
-           liftIO$ atomicModifyIORef' (L.state lv) $ \ mp ->
-             -- Here we pay the cost of a SECOND lookup.  Ouch!
-             case M.lookup key mp of
-               Nothing -> (M.insert key bot mp,(True,bot))
-               -- Oops! it appeared in the meantime.  Our allocation was still wasted:
-               Just x  -> (mp,(False,x))
+    bot <- G.newBottom
+    liftIO $ atomicModifyIORef' (L.state lv) $ \mp ->
+      -- Here we pay the cost of a SECOND lookup.  Ouch!
+      case M.lookup key mp of
+        Nothing -> (M.insert key bot mp, (True, bot))
+        -- Oops! it appeared in the meantime.  Our allocation was still wasted:
+        Just x -> (mp, (False, x))
 
 -- FIXME: need a delta-thresh!
 --      act <- putLV_ (unWrapLVar lv) putter
-
 
 {-
 
@@ -181,10 +187,10 @@ fromIMap :: IMap k Frzn a -> M.Map k a
 fromIMap (IMap lv) = unsafeDupablePerformIO (readIORef (state lv))
 
 instance PC.Generator (IMap k Frzn a) where
-  type ElemOf (IMap k Frzn a) = (k,a)
+  type ElemOf (IMap k Frzn a) = (k, a)
   {-# INLINE fold #-}
   fold fn zer mp = PC.fold fn zer (fromIMap mp)
 
-  -- {-# INLINE foldMP #-}
-  -- | More efficient, not requiring unsafePerformIO or risk of duplication.
-  -- foldMP fn zer mp = foldMP fn zer (fromIMap mp)
+-- {-# INLINE foldMP #-}
+-- \| More efficient, not requiring unsafePerformIO or risk of duplication.
+-- foldMP fn zer mp = foldMP fn zer (fromIMap mp)

@@ -1,32 +1,40 @@
-{-# LANGUAGE ConstraintKinds     #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeFamilies #-}
 
-module CancelTests (tests, runTests)
-       where
+module CancelTests (tests, runTests) where
 
-import           Control.LVish            (DbgCfg (..), isDet, runParDetailed,
-                                           runParNonDet)
-import           Control.LVish.CancelT
-import           Control.LVish.Internal
-import           Control.Par.Class
-import           Control.Par.Class.Unsafe
-import           Control.Par.EffectSigs
-
-import           Control.Concurrent
-import           Data.IORef
-import           Data.List                (isInfixOf)
-import           Prelude                  hiding (log)
-
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import Control.Concurrent
+import Control.LVish
+  ( DbgCfg (..)
+  , isDet
+  , runParDetailed
+  , runParNonDet
+  )
+import Control.LVish.CancelT
+import Control.LVish.Internal
+import Control.Par.Class
+import Control.Par.Class.Unsafe
+import Control.Par.EffectSigs
+import Data.IORef
+import Data.List (isInfixOf)
+import Test.Tasty
+import Test.Tasty.HUnit
+import Prelude hiding (log)
 
 tests :: TestTree
-tests = testGroup "CancelT tests"
-  [simpleLogging, loggingWCancelT, cancelSelfSimple,
-   cancelSelf, cancelOther, cancelOther_self]
+tests =
+  testGroup
+    "CancelT tests"
+    [ simpleLogging
+    , loggingWCancelT
+    , cancelSelfSimple
+    , cancelSelf
+    , cancelOther
+    , cancelOther_self
+    ]
 
 runTests :: IO ()
 runTests = defaultMain tests
@@ -39,7 +47,7 @@ appreciableDelay = threadDelay (100 * 1000)
 
 type Logger = IORef [String] -- new logs are just consed, reverse before use
 
-dbg :: ParMonad p => Logger -> String -> p e s ()
+dbg :: (ParMonad p) => Logger -> String -> p e s ()
 dbg logger msg = internalLiftIO $ modifyIORef' logger (msg :)
 
 -- FIXME: Logging has some problems:
@@ -67,19 +75,23 @@ assertNoError logs =
   assertBool ("Found error message in logs: " ++ show logs) (not $ any (isInfixOf "!!") logs)
 
 -- | A runner for testing which both grabs logs AND echos them to the screen.
-runDbg :: (Logger -> forall s . Par e s a) -> IO ([String], Either String a)
+runDbg :: (Logger -> forall s. Par e s a) -> IO ([String], Either String a)
 runDbg comp = do
   logs <- newIORef []
   numCap <- getNumCapabilities
-  (_,ans) <- runParDetailed
-                   DbgCfg { dbgRange = Nothing
-                          , dbgDests = []
-                          , dbgScheduling = False }
-                   numCap (comp logs)
+  (_, ans) <-
+    runParDetailed
+      DbgCfg
+        { dbgRange = Nothing
+        , dbgDests = []
+        , dbgScheduling = False
+        }
+      numCap
+      (comp logs)
   logs' <- reverse `fmap` readIORef logs
   case ans of
     Left err -> return $! (logs', Left (show err))
-    Right x  -> return $! (logs', Right x)
+    Right x -> return $! (logs', Right x)
 
 simpleLogging :: TestTree
 simpleLogging = testCase "Make sure the logger is working with Par" $ do
@@ -108,9 +120,9 @@ cancelSelf = testCase "Self cancellation with logging" $ do
 cancelSelf' :: IO [String]
 cancelSelf' = do
   (logs, Left err) <- runDbg $ \l -> isDet $ runCancelT $ do
-       dbg l "Begin test 01: about to cancelMe on main thread"
-       cancelMe -- this is just returnToSched from LVarSched method of Par
-       dbg l "!! Past cancelation point!"
+    dbg l "Begin test 01: about to cancelMe on main thread"
+    cancelMe -- this is just returnToSched from LVarSched method of Par
+    dbg l "!! Past cancelation point!"
   assertBool "cancel01: correct error" $ "cancelMe: cannot be used" `isInfixOf` err
   return logs
 
@@ -122,31 +134,33 @@ cancelOther' :: IO ([String], Either String ())
 cancelOther' =
   runDbg $ \l -> isDet $ runCancelT (comp l)
  where
-   comp :: forall e s .
-           (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>
-           Logger -> CancelT Par e s ()
-   comp l = do
-     dbg l "[parent] Begin test 02"
-     iv <- new
-     dbg l "[parent] Created IVar"
+  comp
+    :: forall e s
+     . (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e))
+    => Logger
+    -> CancelT Par e s ()
+  comp l = do
+    dbg l "[parent] Begin test 02"
+    iv <- new
+    dbg l "[parent] Created IVar"
 
-     let p1 :: CancelT Par (SetReadOnly e) s ()
-         p1 = do
-           dbg l "[child] Running on child thread... block so parent can run"
-           -- lift $ Control.LVish.yield -- Not working!
-           -- Do we need this? ^ Next line will force rescheduling.
-           get iv -- This forces the parent to get scheduled.
-           dbg l "[child] Woke up, now wait so we will be cancelled..."
-           internalLiftIO appreciableDelay
-           pollForCancel
-           dbg l "!! [child] thread got past delay!"
+    let p1 :: CancelT Par (SetReadOnly e) s ()
+        p1 = do
+          dbg l "[child] Running on child thread... block so parent can run"
+          -- lift $ Control.LVish.yield -- Not working!
+          -- Do we need this? ^ Next line will force rescheduling.
+          get iv -- This forces the parent to get scheduled.
+          dbg l "[child] Woke up, now wait so we will be cancelled..."
+          internalLiftIO appreciableDelay
+          pollForCancel
+          dbg l "!! [child] thread got past delay!"
 
-     (tid, _) <- forkCancelable p1
-     dbg l "[parent] Putting to IVar"
-     put iv ()
-     dbg l "[parent] Cancelling child thread"
-     cancel tid
-     dbg l "[parent] Issued cancel, now exiting."
+    (tid, _) <- forkCancelable p1
+    dbg l "[parent] Putting to IVar"
+    put iv ()
+    dbg l "[parent] Cancelling child thread"
+    cancel tid
+    dbg l "[parent] Issued cancel, now exiting."
 
 -- Different than 02 in that child thread cancels itself.
 cancelOther_self :: TestTree
@@ -156,24 +170,26 @@ cancelOther_self = testCase "Spawned thread cancels itself" $ do
 
 cancelOther_self' :: IO ([String], Either String ())
 cancelOther_self' = runDbg $ \l -> isDet $ runCancelT (comp l)
-  where
-    comp :: forall e s .
-            (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>
-            Logger -> CancelT Par e s ()
-    comp l = do
-      dbg l "Begin test 02B"
+ where
+  comp
+    :: forall e s
+     . (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e))
+    => Logger
+    -> CancelT Par e s ()
+  comp l = do
+    dbg l "Begin test 02B"
 
-      let p1 :: CancelT Par (SetReadOnly e) s ()
-          p1 = do
-            dbg l "(1) Running on child thread..."
-            cancelMe
-            dbg l "!! (2) Running on child thread..."
+    let p1 :: CancelT Par (SetReadOnly e) s ()
+        p1 = do
+          dbg l "(1) Running on child thread..."
+          cancelMe
+          dbg l "!! (2) Running on child thread..."
 
-      _ <- forkCancelable p1
-      dbg l "Waiting on main thread..."
-      internalLiftIO $ appreciableDelay
-      dbg l "Now exiting on main thread."
-      return ()
+    _ <- forkCancelable p1
+    dbg l "Waiting on main thread..."
+    internalLiftIO $ appreciableDelay
+    dbg l "Now exiting on main thread."
+    return ()
 
 --------------------------------------------------------------------------------
 -- Tests:
@@ -206,7 +222,6 @@ cancelOther_self' = runDbg $ \l -> isDet $ runCancelT (comp l)
 --               CT.asyncAnd (return False) (return True) (PC.put v)
 --               PC.get v
 
-
 -- case_andTreeF :: Assertion
 -- case_andTreeF = assertEqual "" False $ runPar $ runCancelT $ andTreeF 16
 
@@ -227,8 +242,6 @@ cancelOther_self' = runDbg $ \l -> isDet $ runCancelT (comp l)
 --   v <- PC.new
 --   CT.asyncAnd (andTreeT (depth-1)) (andTreeT (depth-1)) (PC.put v)
 --   PC.get v
-
-
 
 -- TODO: tree of ANDs with cancellation..
 {-

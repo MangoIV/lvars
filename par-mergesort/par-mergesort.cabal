@@ -1,23 +1,18 @@
-name:                par-mergesort
-version:             1.0
-build-type:          Simple
-cabal-version:       >=1.8
-
-synopsis: Fast in-place parallel mergesort using a Par-monad.
-
+name:          par-mergesort
+version:       1.0
+build-type:    Simple
+cabal-version: >=1.8
+synopsis:      Fast in-place parallel mergesort using a Par-monad.
 description:
-
   Out-of-place parallel sorts are not fast.  Even if they bottom out
   to fast sequential sorts, executing an out-of-place sort at larger
   array sizes creates extra memory traffic exactly when array slices
   are larger than last-level cache.
-
   This module provides a guaranteed-deterministic parallel mergesort
   that uses only the safe API provided by the `ParST` monad
   transformer.  It works with any underlying `ParMonad`.
 
-
-Source-repository head
+source-repository head
   type:     git
   location: https://github.com/iu-parfunc/lvars
   subdir:   haskell/par-transformers/bench/mergesort
@@ -28,57 +23,55 @@ library
     Control.Par.MergeSort.Internal
 
   build-depends:
-    base                    == 4.*,
-    lvish,
-    monad-par,
-    mtl,
-    par-classes,
-    par-transformers,
-    vector                  >= 0.10 && < 0.12,
-    vector-algorithms,
-    primitive               >= 0.6
+      base               >=4    && <5
+    , lvish
+    , monad-par
+    , mtl
+    , par-classes
+    , par-transformers
+    , primitive          >=0.6
+    , vector             >=0.10 && <0.12
+    , vector-algorithms
 
-  c-sources:                cbits/sort_int32.c
-                            cbits/sort_int64.c
+  c-sources:
+    cbits/sort_int32.c
+    cbits/sort_int64.c
+
   -- required for REPL, not sure about performance implications
-  cc-options:               -fPIC
-
-  ghc-options:              -O2 -Wall
+  cc-options:      -fPIC
+  ghc-options:     -O2 -Wall
 
 test-suite test-mergesort
-  type:                 exitcode-stdio-1.0
-  hs-source-dirs:       test/
-  main-is:              Main.hs
-
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test/
+  main-is:        Main.hs
   build-depends:
-    base,
-    lvish,
-    mtl,
-    par-classes,
-    par-mergesort,
-    par-transformers,
-    random,
-    vector              >= 0.10,
+      base
+    , lvish
+    , mtl
+    , par-classes
+    , par-mergesort
+    , par-transformers
+    , QuickCheck
+    , random
+    , tasty             >=0.10
+    , tasty-hunit
+    , tasty-quickcheck
+    , vector            >=0.10
 
-    QuickCheck,
-    tasty               >= 0.10,
-    tasty-hunit,
-    tasty-quickcheck
-
-  ghc-options:          -Wall -O2 -rtsopts -threaded -eventlog
+  ghc-options:    -Wall -O2 -rtsopts -threaded -eventlog
 
 benchmark bench-mergesort
-  type:                 exitcode-stdio-1.0
-  main-is:              Main.hs
-  hs-source-dirs:       bench/
-
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  hs-source-dirs: bench/
   build-depends:
-    base,
-    criterion           >= 1.1,
-    lvish,
-    par-classes,
-    par-mergesort,
-    par-transformers,
-    vector
+      base
+    , criterion         >=1.1
+    , lvish
+    , par-classes
+    , par-mergesort
+    , par-transformers
+    , vector
 
-  ghc-options:          -Wall -O2
+  ghc-options:    -Wall -O2

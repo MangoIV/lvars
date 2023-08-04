@@ -1,40 +1,38 @@
-{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-{-|
-
-A collection of useful parallel combinators based on top of a 'Par' monad together
-with "Data.Splittable".
-
--}
-
+-- |
+--
+-- A collection of useful parallel combinators based on top of a 'Par' monad together
+-- with "Data.Splittable".
 module Data.Par.Splittable
-  (
-    -- * Efficient, balanced parallel traversals for splittable structures
+  ( -- * Efficient, balanced parallel traversals for splittable structures
 
     -- | These operations require an instance of `Data.Splittable.Split`, but in
     -- return they can perform more balanced traversals that are more tolerant of
     -- fine-granularity.
-    pmapReduce, pmapReduce_, pmapReduceWith_,
-    pforEach, asyncForEach,
+    pmapReduce
+  , pmapReduce_
+  , pmapReduceWith_
+  , pforEach
+  , asyncForEach
 
     -- * The underlying, general version of which the above are specializations
-    mkMapReduce
+  , mkMapReduce
   )
 where
 
-import           Control.DeepSeq
+import Control.DeepSeq
 -- import Control.Par.EffectSigs
-import           Control.Monad          as M hiding (join, mapM, sequence)
-import           Control.Par.Class
-import           Data.Traversable
-import           Prelude                hiding (head, mapM, sequence, tail)
-
-import           Control.Par.Class      as PC
-import           Control.Par.EffectSigs
-import           Data.Splittable.Class  (Split (..))
+import Control.Monad as M hiding (join, mapM, sequence)
+import Control.Par.Class
+import Control.Par.Class as PC
+import Control.Par.EffectSigs
+import Data.Splittable.Class (Split (..))
+import Data.Traversable
+import Prelude hiding (head, mapM, sequence, tail)
 
 -- -----------------------------------------------------------------------------
 -- Parallel maps over splittable data structures
@@ -59,37 +57,53 @@ import           Data.Splittable.Class  (Split (..))
 -- on different machines if the reduce function is not associative.  But even then,
 -- platform portability does NOT require a commutative reduce function.  This combinator
 -- will always fold earlier results on the left and later on the right.
-pmapReduce :: forall c e s m a .
-      (Split c, Generator c, ParFuture m, HasPut e, HasGet e, FutContents m a, NFData a)
-      => c                 -- ^ element generator to consume
-      -> (ElemOf c -> m e s a) -- ^ compute one result
-      -> (a -> a -> m e s a)   -- ^ combine two results
-      -> a                 -- ^ initial accumulator value
-      -> m e s a
+pmapReduce
+  :: forall c e s m a
+   . (Split c, Generator c, ParFuture m, HasPut e, HasGet e, FutContents m a, NFData a)
+  => c
+  -- ^ element generator to consume
+  -> (ElemOf c -> m e s a)
+  -- ^ compute one result
+  -> (a -> a -> m e s a)
+  -- ^ combine two results
+  -> a
+  -- ^ initial accumulator value
+  -> m e s a
 {-# INLINE pmapReduce #-}
 pmapReduce = mkMapReduce split PC.foldM spawn
 
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
-pmapReduce_ :: forall c e s m a .
-      (Split c, Generator c, HasPut e, HasGet e, ParFuture m, FutContents m a)
-      => c                     -- ^ element generator to consume
-      -> (ElemOf c -> m e s a) -- ^ compute one result
-      -> (a -> a -> m e s a)   -- ^ combine two results
-      -> a                 -- ^ initial accumulator value
-      -> m e s a
+pmapReduce_
+  :: forall c e s m a
+   . (Split c, Generator c, HasPut e, HasGet e, ParFuture m, FutContents m a)
+  => c
+  -- ^ element generator to consume
+  -> (ElemOf c -> m e s a)
+  -- ^ compute one result
+  -> (a -> a -> m e s a)
+  -- ^ combine two results
+  -> a
+  -- ^ initial accumulator value
+  -> m e s a
 {-# INLINE pmapReduce_ #-}
 pmapReduce_ = mkMapReduce split PC.foldM spawn_
 
 -- | A version of `pmapReduce_` that uses a custom splitting function.
-pmapReduceWith_ :: forall c e s m a .
-      (Generator c, ParFuture m, HasPut e, HasGet e, FutContents m a)
-      => (c -> [c])        -- ^ splitting function.
-      -> c                 -- ^ element generator to consume
-      -> (ElemOf c -> m e s a) -- ^ compute one result
-      -> (a -> a -> m e s a)   -- ^ combine two results
-      -> a                 -- ^ initial accumulator value
-      -> m e s a
+pmapReduceWith_
+  :: forall c e s m a
+   . (Generator c, ParFuture m, HasPut e, HasGet e, FutContents m a)
+  => (c -> [c])
+  -- ^ splitting function.
+  -> c
+  -- ^ element generator to consume
+  -> (ElemOf c -> m e s a)
+  -- ^ compute one result
+  -> (a -> a -> m e s a)
+  -- ^ combine two results
+  -> a
+  -- ^ initial accumulator value
+  -> m e s a
 {-# INLINE pmapReduceWith_ #-}
 pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
 
@@ -98,67 +112,76 @@ pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
 --
 --  This is SYNCHRONOUS; that is, it does not return until all of the actions are
 --  executed.
-pforEach :: (Split c, Generator c, ParFuture m, HasPut e, HasGet e, FutContents m ())
-      => c                  -- ^ element generator to consume
-      -> (ElemOf c -> m e s ()) -- ^ compute one result
-      -> m e s ()
+pforEach
+  :: (Split c, Generator c, ParFuture m, HasPut e, HasGet e, FutContents m ())
+  => c
+  -- ^ element generator to consume
+  -> (ElemOf c -> m e s ())
+  -- ^ compute one result
+  -> m e s ()
 {-# INLINE pforEach #-}
-pforEach gen mp = pmapReduce_ gen mp (\ () () -> return ()) ()
+pforEach gen mp = pmapReduce_ gen mp (\() () -> return ()) ()
 
 -- | Non-blocking version of pforEach.
-asyncForEach :: (Split c, Generator c, ParFuture m, FutContents m ())
-      => c                  -- ^ element generator to consume
-      -> (ElemOf c -> m e s ()) -- ^ compute one result
-      -> m e s ()
+asyncForEach
+  :: (Split c, Generator c, ParFuture m, FutContents m ())
+  => c
+  -- ^ element generator to consume
+  -> (ElemOf c -> m e s ())
+  -- ^ compute one result
+  -> m e s ()
 -- asyncForEach = asyncForEachHP Nothing
 asyncForEach gen fn =
   case split gen of
     [seqchunk] -> PC.forM_ seqchunk fn
-    ls -> M.forM_ ls $ \ gen_i ->
-            fork $
-              PC.forM_ gen_i fn
+    ls -> M.forM_ ls $ \gen_i ->
+      fork $
+        PC.forM_ gen_i fn
 
 -- | Make a parallel map-reduce function given a custom
 --   function for spawning work.
 mkMapReduce
-   :: forall c e f s m a .
-      (ParFuture m, HasPut f, HasGet f, FutContents m a)
-      => (c -> [c])
-      -- ^ splitting function
-      -> ((a -> e -> m f s a) -> a -> c -> m f s a)
-      -- ^ sequential fold function
-      -> (m f s a -> m f s (Future m s a))
-      -- ^ spawn function
-      -> c
-      -- ^ element generator to consume
-      -> (e -> m f s a)
-      -- ^ compute one result
-      -> (a -> a -> m f s a)
-      -- ^ combine two results
-      -> a
-      -- ^ initial accumulator value
-      -> m f s a
+  :: forall c e f s m a
+   . (ParFuture m, HasPut f, HasGet f, FutContents m a)
+  => (c -> [c])
+  -- ^ splitting function
+  -> ((a -> e -> m f s a) -> a -> c -> m f s a)
+  -- ^ sequential fold function
+  -> (m f s a -> m f s (Future m s a))
+  -- ^ spawn function
+  -> c
+  -- ^ element generator to consume
+  -> (e -> m f s a)
+  -- ^ compute one result
+  -> (a -> a -> m f s a)
+  -- ^ combine two results
+  -> a
+  -- ^ initial accumulator value
+  -> m f s a
 {-# INLINE mkMapReduce #-}
 mkMapReduce splitter seqfold spawner genc fn binop initAcc = loop genc
  where
   mapred :: a -> e -> m f s a
-  mapred ac b = do x <- fn b;
-                   result <- ac `binop` x
-                   return result
+  mapred ac b = do
+    x <- fn b
+    result <- ac `binop` x
+    return result
   loop :: c -> m f s a
   loop gen =
     -- trace ("[DBG] Looping around mkMapReduce...") $
     case splitter gen of
       -- Sequential case, use Generator class:
-      [seqchunk] -> -- trace ("[DBG]   Bottoming out to sequential fold..") $
-                    seqfold mapred initAcc seqchunk
-        -- foldM mapred initAcc [min..max]
-      [a,b] -> do iv <- spawner$ loop a
-                  res2 <- loop b
-                  res1 <- get iv
-                  binop res1 res2
-      ls@(_:_:_) ->
-        do ivs <- mapM (spawner . loop) ls
-           M.foldM (\ acc iv -> get iv >>= binop acc) initAcc ivs
+      [seqchunk] ->
+        -- trace ("[DBG]   Bottoming out to sequential fold..") $
+        seqfold mapred initAcc seqchunk
+      -- foldM mapred initAcc [min..max]
+      [a, b] -> do
+        iv <- spawner $ loop a
+        res2 <- loop b
+        res1 <- get iv
+        binop res1 res2
+      ls@(_ : _ : _) ->
+        do
+          ivs <- mapM (spawner . loop) ls
+          M.foldM (\acc iv -> get iv >>= binop acc) initAcc ivs
       [] -> return initAcc
-

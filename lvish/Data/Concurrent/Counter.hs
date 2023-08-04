@@ -1,8 +1,7 @@
 -- | A simple, non-scalable counter.
+module Data.Concurrent.Counter (Counter, new, inc, dec, poll) where
 
-module Data.Concurrent.Counter(Counter, new, inc, dec, poll) where
-
-import           Data.IORef
+import Data.IORef
 
 type Counter = IORef Int
 
@@ -11,10 +10,10 @@ new = newIORef 0
 
 -- TODO: at least switch to use fetch-and-add...
 inc :: Counter -> IO ()
-inc c = atomicModifyIORef' c $ \n -> (n+1,())
+inc c = atomicModifyIORef' c $ \n -> (n + 1, ())
 
 dec :: Counter -> IO ()
-dec c = atomicModifyIORef' c $ \n -> (n-1,())
+dec c = atomicModifyIORef' c $ \n -> (n - 1, ())
 
 -- | Is the counter (transiently) zero?
 poll :: Counter -> IO Bool

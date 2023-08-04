@@ -1,52 +1,57 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 
-{-|
-
-This module provides sets that allow both addition and removal of
-elements.  This is possible because, under the hood, it's represented
-with two monotonically growing sets, one for additions and one for
-removals.  It is inspired by /2P-Sets/ from the literature on
-/conflict-free replicated data types/.
-
- -}
+-- |
+--
+-- This module provides sets that allow both addition and removal of
+-- elements.  This is possible because, under the hood, it's represented
+-- with two monotonically growing sets, one for additions and one for
+-- removals.  It is inspired by /2P-Sets/ from the literature on
+-- /conflict-free replicated data types/.
 module Data.LVar.AddRemoveSet
-       (
-         AddRemoveSet,
-         newEmptySet, newSet, newFromList,
-         insert, waitAddedElem, waitAddedSize,
-         remove, waitRemovedElem, waitRemovedSize,
+  ( AddRemoveSet
+  , newEmptySet
+  , newSet
+  , newFromList
+  , insert
+  , waitAddedElem
+  , waitAddedSize
+  , remove
+  , waitRemovedElem
+  , waitRemovedSize
+  , freezeSet
+  )
+where
 
-         freezeSet
-
-       ) where
-import           Control.Applicative
-import           Control.LVish
-import qualified Data.LVar.PureSet   as PS
-import qualified Data.Set            as S
+import Control.Applicative
+import Control.LVish
+import qualified Data.LVar.PureSet as PS
+import qualified Data.Set as S
 
 -- | The set datatype.
-data AddRemoveSet s a =
-     AddRemoveSet !(PS.ISet s a)
-                  !(PS.ISet s a)
+data AddRemoveSet s a
+  = AddRemoveSet
+      !(PS.ISet s a)
+      !(PS.ISet s a)
 
 -- | Create a new, empty `AddRemoveSet`.
-newEmptySet :: Ord a => Par e s (AddRemoveSet s a)
+newEmptySet :: (Ord a) => Par e s (AddRemoveSet s a)
 newEmptySet = newSet S.empty
 
 -- | Create a new `AddRemoveSet` populated with initial elements.
-newSet :: Ord a => S.Set a -> Par e s (AddRemoveSet s a)
+newSet :: (Ord a) => S.Set a -> Par e s (AddRemoveSet s a)
 -- Here we're creating two new PureSets, one from the provided initial
 -- elements (the "add" set) and one empty (the "remove" set), and
 -- then, since both of those return `Par` computations, we're using
 -- our friends `<$>` and `<*>`.
 newSet set = AddRemoveSet <$> (PS.newSet set) <*> PS.newEmptySet
+
 -- Alternate version that works if we import `Control.Monad`:
 -- newSet set = ap (fmap AddRemoveSet (PS.newSet set)) PS.newEmptySet
 
 -- | A simple convenience function.  Create a new 'ISet' drawing
 -- initial elements from an existing list.
-newFromList :: Ord a => [a] -> Par e s (AddRemoveSet s a)
+newFromList :: (Ord a) => [a] -> Par e s (AddRemoveSet s a)
 newFromList ls = newSet (S.fromList ls)
 
 -- | Put a single element in the set.  (WHNF) Strict in the element
@@ -63,7 +68,7 @@ waitAddedElem :: (HasGet e, Ord a) => a -> AddRemoveSet s a -> Par e s ()
 waitAddedElem !elm (AddRemoveSet added _) = PS.waitElem elm added
 
 -- | Wait on the size of the set of added elements.
-waitAddedSize :: HasGet e => Int -> AddRemoveSet s a -> Par e s ()
+waitAddedSize :: (HasGet e) => Int -> AddRemoveSet s a -> Par e s ()
 -- You get the idea...
 waitAddedSize !sz (AddRemoveSet added _) = PS.waitSize sz added
 
@@ -77,11 +82,11 @@ waitRemovedElem :: (HasGet e, Ord a) => a -> AddRemoveSet s a -> Par e s ()
 waitRemovedElem !elm (AddRemoveSet _ removed) = PS.waitElem elm removed
 
 -- | Wait on the size of the set of removed elements.
-waitRemovedSize :: HasGet e => Int -> AddRemoveSet s a -> Par e s ()
+waitRemovedSize :: (HasGet e) => Int -> AddRemoveSet s a -> Par e s ()
 waitRemovedSize !sz (AddRemoveSet _ removed) = do
-   logDbgLn 2 "waitRemovedSize: about to block."
-   PS.waitSize sz removed
-   logDbgLn 2 "waitRemovedSize: unblocked, returning."
+  logDbgLn 2 "waitRemovedSize: about to block."
+  PS.waitSize sz removed
+  logDbgLn 2 "waitRemovedSize: unblocked, returning."
 
 -- | Get the exact contents of the set.  As with any
 -- quasi-deterministic operation, using `freezeSet` may cause your

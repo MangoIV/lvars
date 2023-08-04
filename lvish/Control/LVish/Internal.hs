@@ -1,47 +1,45 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures             #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE Unsafe                     #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE Unsafe #-}
 
-
-{-|
-
-This module is /not/ Safe Haskell; as an end-user, you shouldn't ever
-need to import it.
-
-It is exposed only because it is necessary for implementing /new/ LVar
-types that will live in their own, separate packages.
-
--}
-
+-- |
+--
+-- This module is /not/ Safe Haskell; as an end-user, you shouldn't ever
+-- need to import it.
+--
+-- It is exposed only because it is necessary for implementing /new/ LVar
+-- types that will live in their own, separate packages.
 module Control.LVish.Internal
-  (
-    -- * Type-safe wrappers around internal components
-    Par(..), LVar(..),
+  ( -- * Type-safe wrappers around internal components
+    Par (..)
+  , LVar (..)
 
     -- * Unsafe conversions and lifting
-    unWrapPar, unsafeRunPar,
-    unsafeConvert, unsafeDet,
-    state, liftIO,
+  , unWrapPar
+  , unsafeRunPar
+  , unsafeConvert
+  , unsafeDet
+  , state
+  , liftIO
 
     -- * Debugging information taken from the environment
-    L.dbgLvl
+  , L.dbgLvl
   )
-  where
+where
 
 import qualified Control.LVish.Internal.SchedIdempotent as L
-import           Control.Par.EffectSigs
-import           Data.Concurrent.Internal.MonadToss
-
-import qualified Control.Par.Class                      as PC
-import qualified Control.Par.Class.Unsafe               as PU
+import qualified Control.Par.Class as PC
+import qualified Control.Par.Class.Unsafe as PU
+import Control.Par.EffectSigs
+import Data.Concurrent.Internal.MonadToss
 
 -- | This is how we stamp Par as being legit.
-instance PU.SecretSuperClass Par where
+instance PU.SecretSuperClass Par
 
 -- | This provides a Monad instance also.
 instance PU.ParMonad Par where
@@ -50,8 +48,8 @@ instance PU.ParMonad Par where
   liftReadOnly (WrapPar p) = WrapPar p
 
   pbind (WrapPar lp) fn = WrapPar (lp >>= fn')
-    where
-      fn' x = case fn x of WrapPar p -> p -- FIXME: could be a safe coerce?
+   where
+    fn' x = case fn x of WrapPar p -> p -- FIXME: could be a safe coerce?
   preturn x = WrapPar (return x)
 
   --------------- Private methods ------------------
@@ -63,9 +61,12 @@ instance PU.ParMonad Par where
   {-# INLINE dropToUnsafe #-}
   {-# INLINE liftUnsafe #-}
 
-{-# INLINE state  #-}
+{-# INLINE state #-}
+
 {-# INLINE unsafeConvert #-}
+
 {-# INLINE unWrapPar #-}
+
 --------------------------------------------------------------------------------
 
 -- | The type of parallel computations.  A computation @Par e s a@ may or may not be
@@ -80,15 +81,15 @@ newtype Par :: EffectSig -> * -> * -> * where
 instance PC.LVarSched Par where
   type LVar Par = L.LVar
 
-  newLV  = WrapPar . L.newLV
+  newLV = WrapPar . L.newLV
   getLV lv glob delt = WrapPar $ L.getLV lv glob delt
-  putLV lv putter    = WrapPar $ L.putLV lv putter
+  putLV lv putter = WrapPar $ L.putLV lv putter
 
-  stateLV (L.LVar{L.state=s}) = (PC.Proxy,s)
+  stateLV (L.LVar {L.state = s}) = (PC.Proxy, s)
 
   returnToSched = WrapPar $ L.mkPar $ \_k -> L.sched
 
-instance PU.ParThreadSafe Par where
+instance PU.ParThreadSafe Par
 
 -- | The generic representation of LVars used by the scheduler.  The
 -- end-user can't actually do anything with these and should not try
@@ -97,7 +98,7 @@ instance PU.ParThreadSafe Par where
 -- LK: I don't care if we use `a` and `d` or `all` and `delt`, but why
 -- not be consistent between here and SchedIdempotent.hs?  Also, what
 -- does `all` mean?
-newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
+newtype LVar s all delt = WrapLVar {unWrapLVar :: L.LVar all delt}
 
 -- | Unsafe: drops type information to go from the safe `Par` monad to
 -- the internal, dangerous one.

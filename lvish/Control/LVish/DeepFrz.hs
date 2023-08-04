@@ -1,34 +1,40 @@
-{-# LANGUAGE ConstraintKinds   #-}
-{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MagicHash         #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE Trustworthy       #-}
-
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- TODO: a more detailed (recursive?) DeepFrz instance example might
 -- be really helpful here for people who want to implement their own
 -- LVar types. -- LK
 
 module Control.LVish.DeepFrz
-       (
-         -- * The functions you'll want to use
-         runParThenFreeze,
-         runParThenFreezeIO,
+  ( -- * The functions you'll want to use
+    runParThenFreeze
+  , runParThenFreezeIO
 
-         -- * Some supporting types
-         DeepFrz(), FrzType,
-         NonFrzn, Frzn, Trvrsbl,
-
-       ) where
+    -- * Some supporting types
+  , DeepFrz ()
+  , FrzType
+  , NonFrzn
+  , Frzn
+  , Trvrsbl
+  )
+where
 
 -- import Control.LVish (LVarData1(..))
-import           Control.LVish.DeepFrz.Internal         (DeepFrz (..), Frzn,
-                                                         NonFrzn, Trvrsbl)
-import           Control.LVish.Internal                 (Par (WrapPar))
-import           Control.LVish.Internal.SchedIdempotent (runPar, runParIO)
-import           Control.Par.EffectSigs
+import Control.LVish.DeepFrz.Internal
+  ( DeepFrz (..)
+  , Frzn
+  , NonFrzn
+  , Trvrsbl
+  )
+import Control.LVish.Internal (Par (WrapPar))
+import Control.LVish.Internal.SchedIdempotent (runPar, runParIO)
+import Control.Par.EffectSigs
+
 --------------------------------------------------------------------------------
 
 -- | Under normal conditions, calling a `freeze` operation inside a
@@ -61,7 +67,7 @@ runParThenFreeze (WrapPar p) = frz $ runPar p
 -- `freeze` at the end of a `runParIO`: there is an implicit barrier
 -- before the final freeze.  Further, `DeepFrz` has no runtime
 -- overhead, whereas regular freezing has a cost.
-runParThenFreezeIO :: DeepFrz a => Par e NonFrzn a -> IO (FrzType a)
+runParThenFreezeIO :: (DeepFrz a) => Par e NonFrzn a -> IO (FrzType a)
 runParThenFreezeIO (WrapPar p) = do
   x <- runParIO p
   return $ frz x

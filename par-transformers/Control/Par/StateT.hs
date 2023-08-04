@@ -1,20 +1,22 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances,
-             MultiParamTypeClasses, UndecidableInstances, CPP #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module provides a notion of (Splittable) State that is
 --   compatible with any Par monad.
 --
 --   This module provides instances that make StateT-transformed
 --   monads into valid Par monads.
-
 module Control.Par.StateT
-  (
-    -- * Class for state split at fork points
-   SplittableState(..)
-   -- * Also note exported instances.
+  ( -- * Class for state split at fork points
+    SplittableState (..)
+
+    -- * Also note exported instances.
   )
-  where
+where
 
 {-
 import Control.Monad
@@ -45,7 +47,7 @@ import Control.Par.Class.Unsafe (ParMonad(..), ParThreadSafe(..))
 --   The limitation of this approach is that the splitting method is
 --   fixed, and the same at all `fork` points.
 class SplittableState a where
-  splitState :: a -> (a,a)
+  splitState :: a -> (a, a)
 
 ----------------------------------------------------------------------------------------------------
 -- Strict State:
@@ -136,7 +138,6 @@ instance (SplittableState s, PC.ParIVar p)
   put_ v x = lift$ PC.put_ v x
   {-# INLINE newFull_ #-}
   newFull_ = lift . PC.newFull_
-
 
 -- </DUPLICATE_CODE>
 

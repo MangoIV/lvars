@@ -1,27 +1,25 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds       #-}
-{-# LANGUAGE KindSignatures  #-}
-{-# LANGUAGE RankNTypes      #-}
-{-# LANGUAGE TypeFamilies    #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Control.Par.Scheds.Trace
   ( Par
   , runPar
   , runParPoly
-  ) where
-
-import           System.IO.Unsafe               (unsafePerformIO)
-
-import           Control.Par.Class
-import qualified Control.Par.Class.Unsafe       as PC
-import           Control.Par.EffectSigs
+  )
+where
 
 import qualified Control.Monad.Par.Scheds.Trace as T
+import Control.Par.Class
+import qualified Control.Par.Class.Unsafe as PC
+import Control.Par.EffectSigs
+import System.IO.Unsafe (unsafePerformIO)
 
-newtype Par (e :: EffectSig) s a =
-  Trace { unwrapTrace :: T.Par a }
+newtype Par (e :: EffectSig) s a = Trace {unwrapTrace :: T.Par a}
 
-newtype TraceIVar s a = TraceIVar { unwrapTraceIVar :: T.IVar a }
+newtype TraceIVar s a = TraceIVar {unwrapTraceIVar :: T.IVar a}
 
 instance PC.ParMonad Par where
   pbind (Trace p1) p2 = Trace $ p1 >>= unwrapTrace . p2
@@ -38,5 +36,5 @@ instance ParFuture Par where
 runPar :: (forall s. Par ('Ef 'P 'G 'NF 'B 'NI) s a) -> a
 runPar (Trace p) = T.runPar p
 
-runParPoly :: Deterministic e => Par e s a -> a
+runParPoly :: (Deterministic e) => Par e s a -> a
 runParPoly (Trace p) = T.runPar p

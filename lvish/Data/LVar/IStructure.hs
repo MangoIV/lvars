@@ -1,49 +1,54 @@
-{-# LANGUAGE BangPatterns          #-}
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE Trustworthy           #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | An I-Structure, also known as an array of IVars, implemented using a boxed vector.
-
 module Data.LVar.IStructure
-       (
-         IStructure,
+  ( IStructure
 
-         -- * Basic operations
-         newIStructure, newIStructureWithCallback,
-         put, put_, get, getLength,
+    -- * Basic operations
+  , newIStructure
+  , newIStructureWithCallback
+  , put
+  , put_
+  , get
+  , getLength
 
-         -- * Iteration and callbacks
-         forEachHP,
+    -- * Iteration and callbacks
+  , forEachHP
 
-         -- * Freezing
-         freezeIStructure
-         -- forEach,
-       ) where
+    -- * Freezing
+  , freezeIStructure
+  -- forEach,
+  )
+where
 
-import           Data.Vector                            as V
-
-import           Control.DeepSeq                        (NFData)
-import qualified Data.Foldable                          as F
-import           Data.List                              (intersperse)
-import qualified Data.LVar.IVar                         as IV
+import Control.DeepSeq (NFData)
 -- import qualified Data.Traversable as T
 
-import           Control.LVish                          as LV hiding (get, put,
-                                                               put_)
-import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.Internal                 as LI
-import           Control.LVish.Internal.SchedIdempotent (freezeLV)
-import           Data.LVar.Generic                      as G
-import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
+import Control.LVish as LV hiding
+  ( get
+  , put
+  , put_
+  )
+import Control.LVish.DeepFrz.Internal
+import Control.LVish.Internal as LI
+import Control.LVish.Internal.SchedIdempotent (freezeLV)
+import qualified Data.Foldable as F
+import Data.LVar.Generic as G
+import Data.LVar.Generic.Internal (unsafeCoerceLVar)
+import qualified Data.LVar.IVar as IV
+import Data.List (intersperse)
+import Data.Vector as V
 
 ------------------------------------------------------------------------------
 
@@ -59,16 +64,16 @@ instance Eq (IStructure s v) where
 -- polymorphic operations are less useful than the monomorphic ones exposed by this
 -- module (e.g., @forEachHP@ vs. @addHandler@).
 instance LVarData1 IStructure where
-  freeze orig@(IStructure vec) = WrapPar$ do
+  freeze orig@(IStructure vec) = WrapPar $ do
     -- No new alloc here, just time:
-    V.forM_ vec $ \ (IVar (WrapLVar lv)) -> freezeLV lv
+    V.forM_ vec $ \(IVar (WrapLVar lv)) -> freezeLV lv
     return (unsafeCoerceLVar orig)
 
-  -- | We can do better than the default here; this is /O(1)/:
+  -- \| We can do better than the default here; this is /O(1)/:
   sortFrzn = AFoldable
 
   -- Unlike the IStructure-specific forEach, this takes only values, not indices.
-  addHandler mh is fn = forEachHP mh is (\ _k v -> fn v)
+  addHandler mh is fn = forEachHP mh is (\_k v -> fn v)
 
 -- | The `IStructure`s in this module also have the special property that they
 -- support a freeze operation which immediately yields a `Foldable` container
@@ -82,11 +87,14 @@ instance OrderedLVarData1 IStructure where
 -- `Frzn`, not `Trvrsbl`.
 instance F.Foldable (IStructure Frzn) where
   foldr fn zer (IStructure vec) =
-    F.foldr (\ iv acc ->
-              case IV.fromIVar iv of
-                Nothing -> acc
-                Just x  -> fn x acc)
-             zer vec
+    F.foldr
+      ( \iv acc ->
+          case IV.fromIVar iv of
+            Nothing -> acc
+            Just x -> fn x acc
+      )
+      zer
+      vec
 
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IStructure Trvrsbl) where
@@ -95,20 +103,20 @@ instance F.Foldable (IStructure Trvrsbl) where
 -- @IStructure@ values can be returned as the result of a
 -- `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
 -- @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
-instance DeepFrz a => DeepFrz (IStructure s a) where
+instance (DeepFrz a) => DeepFrz (IStructure s a) where
   type FrzType (IStructure s a) = IStructure Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
 instance (Show a) => Show (IStructure Frzn a) where
   show (IStructure vec) =
-  -- individual elements are showable, and show returns a string, so
-  -- we want to concatenate those.
-    "{IStructure: " Prelude.++
-    (Prelude.concat $ intersperse ", " $ Prelude.map show $ V.toList vec) Prelude.++
-    "}"
+    -- individual elements are showable, and show returns a string, so
+    -- we want to concatenate those.
+    "{IStructure: "
+      Prelude.++ (Prelude.concat $ intersperse ", " $ Prelude.map show $ V.toList vec)
+      Prelude.++ "}"
 
 -- | For convenience only; the user could define this.
-instance Show a => Show (IStructure Trvrsbl a) where
+instance (Show a) => Show (IStructure Trvrsbl a) where
   show = show . castFrzn
 
 ------------------------------------------------------------------------------
@@ -124,35 +132,40 @@ getLength (IStructure vec) = return $! V.length vec
 -- | Create a new, empty, monotonically growing 'IStructure' of a given size.
 --   All entries start off as zero, which must be \"bottom\".
 newIStructure :: Int -> Par e s (IStructure s elt)
-newIStructure len = fmap IStructure $
-                    V.generateM len (\_ -> IV.new)
+newIStructure len =
+  fmap IStructure $
+    V.generateM len (\_ -> IV.new)
 
 -- | Register handlers on each internal IVar as it is created.
 --   This operation should be more efficient than `newIStructure` followed by `forEachHP`.
 newIStructureWithCallback :: Int -> (Int -> elt -> Par e s ()) -> Par e s (IStructure s elt)
 newIStructureWithCallback len fn =
   fmap IStructure $
-   V.generateM len $ \ix -> do
+    V.generateM len $ \ix -> do
       iv <- IV.new
       IV.whenFull Nothing iv (fn ix)
       return iv
 
 -- | /O(N)/ complexity, unfortunately. This implementation of `IStructure`s requires
 -- freezing each of the individual IVars stored in the array.
-freezeIStructure :: HasFreeze e => IStructure s a -> LV.Par e s (V.Vector (Maybe a))
+freezeIStructure :: (HasFreeze e) => IStructure s a -> LV.Par e s (V.Vector (Maybe a))
 freezeIStructure (IStructure vec) = V.mapM IV.freezeIVar vec
 
 {-# INLINE forEachHP #-}
+
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the `IStructure`, optionally enrolled in a handler pool.
-forEachHP :: -- (Eq a) =>
-             Maybe HandlerPool           -- ^ pool to enroll in, if any
-          -> IStructure s a              -- ^ `IStructure` to listen to
-          -> (Int -> a -> Par e s ())    -- ^ callback
-          -> Par e s ()
+forEachHP -- (Eq a) =>
+  :: Maybe HandlerPool
+  -- ^ pool to enroll in, if any
+  -> IStructure s a
+  -- ^ `IStructure` to listen to
+  -> (Int -> a -> Par e s ())
+  -- ^ callback
+  -> Par e s ()
 forEachHP hp (IStructure vec) callb =
   -- F.traverse_ (\iv -> IV.addHandler hp iv callb) vec
-  for_ (0, V.length vec) $ \ ix ->
+  for_ (0, V.length vec) $ \ix ->
     IV.whenFull hp (V.unsafeIndex vec ix) (callb ix)
 
 {-
@@ -177,9 +190,6 @@ forEach :: (Num a, Storable a, Eq a) =>
 forEach = forEachHP Nothing
 -}
 
-
-
-
 {-# INLINE put #-}
 
 -- | Put a single element in the `IStructure` at a given index.  That index must be previously empty.  (WHNF)
@@ -192,6 +202,7 @@ put :: (NFData elt, Eq elt, HasPut e) => IStructure s elt -> Int -> elt -> Par e
 put (IStructure vec) !ix !elm = IV.put (vec ! ix) elm
 
 {-# INLINE get #-}
+
 -- | Wait for the indexed entry to contain a value, and return that value.
 get :: (Eq elt, HasGet e) => IStructure s elt -> Int -> Par e s elt
 get (IStructure vec) !ix = IV.get (vec ! ix)

@@ -1,16 +1,19 @@
-{-# LANGUAGE CPP       #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# OPTIONS_GHC -O2 #-}
-import           Data.Int
-import           GHC.Conc
-import           System.Environment
 
-import qualified Control.LVish          as L
+import qualified Control.LVish as L
 import qualified Control.LVish.Internal as LI
+import Data.Int
 -- import Control.LVish (runPar)
-import           Data.LVar.IVar
+import Data.LVar.IVar
+import GHC.Conc
+import System.Environment
+
 type Par = L.Par L.Det ()
+
 runPar = LI.unsafeRunPar
+
 ------------------------------------------------------------
 
 type FibType = Int64
@@ -19,68 +22,66 @@ type FibType = Int64
 fib :: FibType -> FibType
 fib 0 = 1
 fib 1 = 1
-fib x = fib (x-2) + fib (x-1)
-
+fib x = fib (x - 2) + fib (x - 1)
 
 -- Par monad version:
 parfib1 :: FibType -> Par FibType
 parfib1 n | n < 2 = return 1
 parfib1 n = do
---    xf <- spawn1_ parfib1 (n-1)
-    xf <- spawn_$ parfib1 (n-1)
-    y  <-         parfib1 (n-2)
-    x  <- get xf
-    return (x+y)
+  --    xf <- spawn1_ parfib1 (n-1)
+  xf <- spawn_ $ parfib1 (n - 1)
+  y <- parfib1 (n - 2)
+  x <- get xf
+  return (x + y)
 
 -- Par monad version, with threshold:
 parfib1B :: FibType -> FibType -> Par FibType
 parfib1B n c | n <= c = return $ fib n
 parfib1B n c = do
-    xf <- spawn_$ parfib1B (n-1) c
-    y  <-         parfib1B (n-2) c
-    x  <- get xf
-    return (x+y)
+  xf <- spawn_ $ parfib1B (n - 1) c
+  y <- parfib1B (n - 2) c
+  x <- get xf
+  return (x + y)
 
 -- Gratuitously nested Par monad version:
 parfibNest :: FibType -> FibType -> Par FibType
 parfibNest n c | n <= c = return $ fib n
 parfibNest n c = do
-    xf <- spawnP $ runPar $ helper (n-1) c
-    yf <- spawnP $ runPar $ helper (n-2) c
-    x  <- get xf
-    y  <- get yf
-    return (x+y)
+  xf <- spawnP $ runPar $ helper (n - 1) c
+  yf <- spawnP $ runPar $ helper (n - 2) c
+  x <- get xf
+  y <- get yf
+  return (x + y)
  where
   -- Alternate between nesting and regular spawning:
   helper :: FibType -> FibType -> Par FibType
   helper n c | n <= c = return $ fib n
   helper n c = do
-    xf <- spawn_$ parfibNest (n-1) c
-    y  <-         parfibNest (n-2) c
-    x  <- get xf
-    return (x+y)
-
+    xf <- spawn_ $ parfibNest (n - 1) c
+    y <- parfibNest (n - 2) c
+    x <- get xf
+    return (x + y)
 
 main = do
-    args <- getArgs
-    let (version, size, cutoff) = case args of
-            []      -> ("monad", 20, 1)
-            [v]     -> (v,       20, 1)
-            [v,n]   -> (v, read n,   1)
-            [v,n,c] -> (v, read n, read c)
+  args <- getArgs
+  let (version, size, cutoff) = case args of
+        [] -> ("monad", 20, 1)
+        [v] -> (v, 20, 1)
+        [v, n] -> (v, read n, 1)
+        [v, n, c] -> (v, read n, read c)
 
-    case version of
-        "nested" -> do
-                print$ runPar$ parfibNest size cutoff
-        "monad"  ->
-		if cutoff == 1
-                then do putStrLn "Using non-thresholded version:"
-                        print$ runPar$ parfib1  size
-		else    print$ runPar$ parfib1B size cutoff
-        -- TEMP: force thresholded version even if cutoff==1
-        "thresh" -> print$ runPar$ parfib1B size cutoff
-        _        -> error$ "unknown version: "++version
-
+  case version of
+    "nested" -> do
+      print $ runPar $ parfibNest size cutoff
+    "monad" ->
+      if cutoff == 1
+        then do
+          putStrLn "Using non-thresholded version:"
+          print $ runPar $ parfib1 size
+        else print $ runPar $ parfib1B size cutoff
+    -- TEMP: force thresholded version even if cutoff==1
+    "thresh" -> print $ runPar $ parfib1B size cutoff
+    _ -> error $ "unknown version: " ++ version
 
 {-
 
@@ -101,7 +102,6 @@ main = do
 
   fib(40) 4 threads:    20.6s 78.6s 240GB allocated
 
-
 For comparison, Cilkarts Cilk++:
   fib(42) 4 threads:  3.029s 23.610s
 
@@ -109,7 +109,6 @@ Intel Cilk Plus:
   fib(42) 4 threads:  4.212s 16.770s
 
    1 thread: 17.53 -- e.g. 4.16X speedup
-
 
 [2011.03.29] {A bit more measurement}
 -------------------------------------
@@ -123,7 +122,6 @@ number of resident items), then I get these numbers:
 
 ESTIMATED 3573.76 seconds for fib(42).
 
-
 [2011.10.20] {ContFree approach}
 --------------------------------
 
@@ -131,7 +129,6 @@ Initial version forks a new thread on every get, which does terribly of course.
 
     +RTS -N1 :
      fib(24) 2.3s vs. 0.086
-
 
 [2011.10.11] {Westmere 3.1GHz NoHT 4-core testing}
 --------------------------------------------------
@@ -142,7 +139,6 @@ class) interface.  Starting with Scheds.Sparks:
 
   fib(42) 4 threads: 4.56  17.83   -- Sparks
   fib(42) 4 threads: 50.0  191.6   -- Trace
-
 
 [2011.10.24] {Timing nested scheduler version}
 ----------------------------------------------
@@ -205,12 +201,10 @@ case of the perversely nested parfib!!!
 On the same WestMere, mentioned above.
 This version has extra overhead:
 
-
 And on my laptop:
 
   fib(35) 1 thread : 5.8s   (95% prod, 218MB copied)
   fib(35) 2 thread : 3.2    (70% prod)
   fib(35) 4 threads: 1.93s  (40% prod)
-
 
 -}

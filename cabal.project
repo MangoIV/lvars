@@ -9,3 +9,5 @@ packages:
   -- lvish-graph-algorithms
   -- par-mergesort
   -- par-schedulers
+
+tests: true

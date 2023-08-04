@@ -4,32 +4,31 @@
 -- glue two of those together for this, just as AddRemoveSet does with
 -- sets.
 
-{-|
-
-This module provides a /PN-Counter/, a counter that allows both
-increment and decrement operations.  This is possible because, under
-the hood, it's represented with two monotonically growing counters,
-one for increments and one for decrements.  The name "PN-Counter"
-comes from the literature on /conflict-free replicated data types/.
-
- -}
+-- |
+--
+-- This module provides a /PN-Counter/, a counter that allows both
+-- increment and decrement operations.  This is possible because, under
+-- the hood, it's represented with two monotonically growing counters,
+-- one for increments and one for decrements.  The name "PN-Counter"
+-- comes from the literature on /conflict-free replicated data types/.
 module Data.LVar.PNCounter
-       (
-         PNCounter,
-         newCounter, newCounterWithValue,
-         increment, waitForIncrements,
-         decrement, waitForDecrements,
+  ( PNCounter
+  , newCounter
+  , newCounterWithValue
+  , increment
+  , waitForIncrements
+  , decrement
+  , waitForDecrements
+  , freezeCounter
+  )
+where
 
-         freezeCounter
-
-       ) where
-import           Control.LVish
-import           Control.LVish.Internal
-import qualified Data.Atomics.Counter   as AC
+import Control.LVish
+import Control.LVish.Internal
+import qualified Data.Atomics.Counter as AC
 -- LK: FIXME: it can't be okay to use SchedIdempotent if we're using bump, can it?!
 -- import           Internal.Control.LVish.SchedIdempotent (newLV)
-import           Data.IORef
-
+import Data.IORef
 
 -- | The counter datatype.
 
@@ -46,25 +45,26 @@ newCounterWithValue :: Int -> Par e s (PNCounter s)
 -- I'm supposed to be doing here is wrapping an unsafe internal Par
 -- computation (that's allowed to do IO) in a safe one that I return.
 newCounterWithValue n = undefined
+
 -- FIXME...
-  --                       do
-  -- incs <- newIORef (Just n)
-  -- decs <- newIORef Nothing
+--                       do
+-- incs <- newIORef (Just n)
+-- decs <- newIORef Nothing
 
 -- | Increment the `PNCounter`.
-increment :: HasBump e => PNCounter s -> Par e s ()
+increment :: (HasBump e) => PNCounter s -> Par e s ()
 increment = undefined
 
 -- | Wait for the number of increments to reach a given number.
-waitForIncrements :: HasGet e => Int -> PNCounter s -> Par e s ()
+waitForIncrements :: (HasGet e) => Int -> PNCounter s -> Par e s ()
 waitForIncrements = undefined
 
 -- | Decrement the `PNCounter`.
-decrement :: HasBump e => PNCounter s -> Par e s ()
+decrement :: (HasBump e) => PNCounter s -> Par e s ()
 decrement = undefined
 
 -- | Wait for the number of decrements to reach a given number.
-waitForDecrements :: HasGet e => Int -> PNCounter s -> Par e s ()
+waitForDecrements :: (HasGet e) => Int -> PNCounter s -> Par e s ()
 waitForDecrements = undefined
 
 -- | Get the exact contents of the counter.  As with any
@@ -72,6 +72,6 @@ waitForDecrements = undefined
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeCounter :: HasFreeze e => PNCounter s -> Par e s Int
+freezeCounter :: (HasFreeze e) => PNCounter s -> Par e s Int
 -- Freezing takes the difference of increments and decrements.
 freezeCounter = undefined

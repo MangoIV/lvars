@@ -1,27 +1,25 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds       #-}
-{-# LANGUAGE KindSignatures  #-}
-{-# LANGUAGE RankNTypes      #-}
-{-# LANGUAGE TypeFamilies    #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Control.Par.Scheds.Direct
   ( Par
   , runPar
   , runParPoly
-  ) where
-
-import           System.IO.Unsafe                (unsafePerformIO)
-
-import           Control.Par.Class
-import qualified Control.Par.Class.Unsafe        as PC
-import           Control.Par.EffectSigs
+  )
+where
 
 import qualified Control.Monad.Par.Scheds.Direct as D
+import Control.Par.Class
+import qualified Control.Par.Class.Unsafe as PC
+import Control.Par.EffectSigs
+import System.IO.Unsafe (unsafePerformIO)
 
-newtype Par (e :: EffectSig) s a =
-  Direct { unwrapDirect :: D.Par a }
+newtype Par (e :: EffectSig) s a = Direct {unwrapDirect :: D.Par a}
 
-newtype DirectIVar s a = DirectIVar { unwrapDirectIVar :: D.IVar a }
+newtype DirectIVar s a = DirectIVar {unwrapDirectIVar :: D.IVar a}
 
 instance PC.ParMonad Par where
   pbind (Direct p1) p2 = Direct $ p1 >>= unwrapDirect . p2
@@ -38,5 +36,5 @@ instance ParFuture Par where
 runPar :: (forall s. Par ('Ef 'P 'G 'NF 'B 'NI) s a) -> a
 runPar (Direct p) = D.runPar p
 
-runParPoly :: Deterministic e => Par e s a -> a
+runParPoly :: (Deterministic e) => Par e s a -> a
 runParPoly (Direct p) = D.runPar p

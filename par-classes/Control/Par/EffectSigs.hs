@@ -1,6 +1,15 @@
-{-# LANGUAGE DataKinds, KindSignatures, GADTs, TypeOperators, CPP,
-    GeneralizedNewtypeDeriving, FlexibleInstances, TypeFamilies, RankNTypes,
-    ConstraintKinds, FlexibleContexts, UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Type-level effect signatures that characterize the side-effects of a given `Par`
 -- computation.
@@ -19,45 +28,71 @@
 -- possibility of a put, not a guarantee that one may occur.  Thus
 -- there is an effect subtype ordering for the above effect signatures
 -- in which "pgfbi" is bottom and "PGFBI" is top (all off vs all on).
-
 module Control.Par.EffectSigs
-       (
-        -- * A type-level record of effects
-        EffectSig(..),
-        -- * Simple boolean flags, each with a disttinct kind to prevent mixups
-        Putting(..), Getting(..), Freezing(..), Bumping(..), IOing(..),
+  ( -- * A type-level record of effects
+    EffectSig (..)
 
-        -- * User-visible Constraints
-        HasPut, HasGet, HasFreeze, HasBump, HasIO,
-        NoPut, NoGet, NoFreeze, NoBump, NoIO,
+    -- * Simple boolean flags, each with a disttinct kind to prevent mixups
+  , Putting (..)
+  , Getting (..)
+  , Freezing (..)
+  , Bumping (..)
+  , IOing (..)
 
-        -- * Derived constraints, i.e. shorthands for common combinations:
-        ReadOnly, Deterministic, QuasiDeterministic, Idempotent,
-        SetReadOnly,
+    -- * User-visible Constraints
+  , HasPut
+  , HasGet
+  , HasFreeze
+  , HasBump
+  , HasIO
+  , NoPut
+  , NoGet
+  , NoFreeze
+  , NoBump
+  , NoIO
 
-        -- * Accessor and setter functions for EffectSigs
-        GetP, GetG, GetF, GetB, GetI,
-        SetP, SetG, SetF, SetB, SetI,
-       )
-       where
+    -- * Derived constraints, i.e. shorthands for common combinations:
+  , ReadOnly
+  , Deterministic
+  , QuasiDeterministic
+  , Idempotent
+  , SetReadOnly
+
+    -- * Accessor and setter functions for EffectSigs
+  , GetP
+  , GetG
+  , GetF
+  , GetB
+  , GetI
+  , SetP
+  , SetG
+  , SetF
+  , SetB
+  , SetI
+  )
+where
 
 --------------------------------------------------------------------------------
 
 -- | Currently-tracked effects.  This is INTERNAL/private datatype and subject to
 -- change.  You should use constraints such as `HasGet` rather than directly
 -- depending on this, whereever possible.
-data EffectSig  = Ef Putting Getting Freezing Bumping IOing
+data EffectSig = Ef Putting Getting Freezing Bumping IOing
+
 -- | A boolean by another name.
-data Putting  = P | NP
+data Putting = P | NP
+
 -- | A boolean by another name.
-data Getting  = G | NG
+data Getting = G | NG
+
 -- | A boolean by another name.
 data Freezing = F | NF
--- | A boolean by another name.
-data Bumping  = B | NB
--- | A boolean by another name.
-data IOing    = I | NI
 
+-- | A boolean by another name.
+data Bumping = B | NB
+
+-- | A boolean by another name.
+data IOing = I | NI
 
 --------------------------------------------------------------------------------
 -- Effect sigs and their extraction:
@@ -160,6 +195,4 @@ type ReadOnly e = (NoPut e, NoBump e, NoFreeze e, NoIO e)
       type instance (ReadOnly (Ef p g nf b NI)) = ()
 #endif
 
-
 ----------------------------------------------------------------
-

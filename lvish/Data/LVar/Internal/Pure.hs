@@ -1,72 +1,95 @@
-{-# LANGUAGE BangPatterns          #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE InstanceSigs          #-}
-{-# LANGUAGE MagicHash             #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
-{-# LANGUAGE Unsafe                #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE Unsafe #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-{-|
-
-This is /not/ a datatype for the end-user.
-
-Rather, this module is for building /new/ LVar types in a comparatively easy way: by
-putting a pure value in a mutable container, and defining a @put@ operation as a pure
-function.
-
-The data structure implementor who uses this module must guarantee
-that their @put@ operation computes a /least upper bound/, ensuring
-that the set of states that their LVar type can take on form a
-join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
-
--}
-
+-- |
+--
+-- This is /not/ a datatype for the end-user.
+--
+-- Rather, this module is for building /new/ LVar types in a comparatively easy way: by
+-- putting a pure value in a mutable container, and defining a @put@ operation as a pure
+-- function.
+--
+-- The data structure implementor who uses this module must guarantee
+-- that their @put@ operation computes a /least upper bound/, ensuring
+-- that the set of states that their LVar type can take on form a
+-- join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 module Data.LVar.Internal.Pure
-       ( PureLVar(..),
-         newPureLVar, putPureLVar,
+  ( PureLVar (..)
+  , newPureLVar
+  , putPureLVar
+  , waitPureLVar
+  , freezePureLVar
+  , fromPureLVar
+  , getPureLVar
+  , unsafeGetPureLVar
+  , unsafeMonotonicHandlerHP
 
-         waitPureLVar, freezePureLVar, fromPureLVar,
-         getPureLVar, unsafeGetPureLVar, unsafeMonotonicHandlerHP,
+    -- * Verifying lattice structure
+  , verifyFiniteJoin
+  , verifyFiniteGet
+  )
+where
 
-         -- * Verifying lattice structure
-         verifyFiniteJoin, verifyFiniteGet
-       ) where
-
-import           Control.LVish                          (HandlerPool, HasFreeze,
-                                                         HasGet, HasPut, LVar,
-                                                         Par)
-import           Control.LVish.DeepFrz.Internal         (DeepFrz (..), Frzn)
-import           Control.LVish.Internal                 (LVar (WrapLVar),
-                                                         Par (WrapPar), state,
-                                                         unWrapPar)
-import           Data.IORef                             (IORef,
-                                                         atomicModifyIORef',
-                                                         newIORef, readIORef)
 -- import qualified Data.Set as S
-import           Algebra.Lattice                        (BoundedJoinSemiLattice,
-                                                         Lattice ((\/)),
-                                                         joinLeq)
+import Algebra.Lattice
+  ( BoundedJoinSemiLattice
+  , Lattice ((\/))
+  , joinLeq
+  )
+import Control.LVish
+  ( HandlerPool
+  , HasFreeze
+  , HasGet
+  , HasPut
+  , LVar
+  , Par
+  )
+import Control.LVish.DeepFrz.Internal (DeepFrz (..), Frzn)
+import Control.LVish.Internal
+  ( LVar (WrapLVar)
+  , Par (WrapPar)
+  , state
+  , unWrapPar
+  )
 import qualified Control.LVish.Internal.SchedIdempotent as LI
-import           GHC.Exts                               (unsafeCoerce#)
-import           System.IO.Unsafe                       (unsafeDupablePerformIO,
-                                                         unsafePerformIO)
+import Data.IORef
+  ( IORef
+  , atomicModifyIORef'
+  , newIORef
+  , readIORef
+  )
+import GHC.Exts (unsafeCoerce#)
+import System.IO.Unsafe
+  ( unsafeDupablePerformIO
+  , unsafePerformIO
+  )
+
 --------------------------------------------------------------------------------
 
 -- | An LVar which consists merely of an immutable, pure value inside a mutable box.
 newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
 
-instance Show a => Show (PureLVar Frzn a) where
-  show (PureLVar lv) = show$ unsafePerformIO$ readIORef$ state lv
+instance (Show a) => Show (PureLVar Frzn a) where
+  show (PureLVar lv) = show $ unsafePerformIO $ readIORef $ state lv
 
 -- data PureLVar s t = BoundedJoinSemiLattice t => PureLVar (LVar s (IORef t) t)
 
 {-# INLINE newPureLVar #-}
+
 {-# INLINE putPureLVar #-}
+
 {-# INLINE getPureLVar #-}
+
 {-# INLINE waitPureLVar #-}
+
 {-# INLINE freezePureLVar #-}
 
 -- | Takes a finite set of states and a join operation (e.g., for an
@@ -75,63 +98,97 @@ instance Show a => Show (PureLVar Frzn a) where
 verifyFiniteJoin :: (Eq a, Show a) => [a] -> (a -> a -> a) -> Maybe String
 verifyFiniteJoin allStates join =
   case (isCommutative, isAssociative, isIdempotent) of
-    (hd : _ , _, _) -> Just $ "commutativity violated!: " ++ show hd
-    (_ , hd : _, _) -> Just $ "associativity violated!: " ++ show hd
-    (_ , _, hd : _) -> Just $ "idempotency violated!: " ++ show hd
-    ([], [], [])    -> Nothing
-  where
-    isCommutative = [(a, b) | a <- allStates, b <- allStates, a `join` b /= b `join` a]
-    isAssociative = [(a, b, c) |
-                     a <- allStates,
-                     b <- allStates,
-                     c <- allStates,
-                     a `join` (b `join` c) /= (a `join` b) `join` c]
-    isIdempotent = [a | a <- allStates, a `join` a /= a]
+    (hd : _, _, _) -> Just $ "commutativity violated!: " ++ show hd
+    (_, hd : _, _) -> Just $ "associativity violated!: " ++ show hd
+    (_, _, hd : _) -> Just $ "idempotency violated!: " ++ show hd
+    ([], [], []) -> Nothing
+ where
+  isCommutative = [(a, b) | a <- allStates, b <- allStates, a `join` b /= b `join` a]
+  isAssociative =
+    [ (a, b, c)
+    | a <- allStates
+    , b <- allStates
+    , c <- allStates
+    , a `join` (b `join` c) /= (a `join` b) `join` c
+    ]
+  isIdempotent = [a | a <- allStates, a `join` a /= a]
 
 -- | Verify that a blocking get is monotone in just the right way.
 --   This takes a designated bottom and top element.
-verifyFiniteGet :: (Eq a, Show a, BoundedJoinSemiLattice a,
-                    Eq b, Show b) =>
-                   [a] -> (b,b) -> (a -> b) -> Maybe String
-verifyFiniteGet allStates (bot,top) getter =
-   case (botBefore, constAfter) of
-     ((a,b):_, _) -> Just$ "violation! input "++ show a
-                      ++" unblocked get, but larger input"++show b++" did not."
-     (_, (a,b):_) -> Just$ "violation! value at "++ show a
-                      ++" was non-bottom ("++show (getter a)
-                      ++"), but then changed at "++show b++" ("++ show (getter b)++")"
-     ([],[])      -> Nothing
-  where
-   botBefore = [ (a,b)
-               | a <- allStates, b <- allStates
-               , a `joinLeq` b,  getter b == bot
-               , not (getter a == bot) ]
-   constAfter = [ (a,b)
-                | a <- allStates, b <- allStates
-                , a `joinLeq` b
-                , getter a /= bot
-                , getter a /= getter b
-                , getter b /= top -- It's ok to go to error.
-                ]
-
+verifyFiniteGet
+  :: ( Eq a
+     , Show a
+     , BoundedJoinSemiLattice a
+     , Eq b
+     , Show b
+     )
+  => [a]
+  -> (b, b)
+  -> (a -> b)
+  -> Maybe String
+verifyFiniteGet allStates (bot, top) getter =
+  case (botBefore, constAfter) of
+    ((a, b) : _, _) ->
+      Just $
+        "violation! input "
+          ++ show a
+          ++ " unblocked get, but larger input"
+          ++ show b
+          ++ " did not."
+    (_, (a, b) : _) ->
+      Just $
+        "violation! value at "
+          ++ show a
+          ++ " was non-bottom ("
+          ++ show (getter a)
+          ++ "), but then changed at "
+          ++ show b
+          ++ " ("
+          ++ show (getter b)
+          ++ ")"
+    ([], []) -> Nothing
+ where
+  botBefore =
+    [ (a, b)
+    | a <- allStates
+    , b <- allStates
+    , a `joinLeq` b
+    , getter b == bot
+    , not (getter a == bot)
+    ]
+  constAfter =
+    [ (a, b)
+    | a <- allStates
+    , b <- allStates
+    , a `joinLeq` b
+    , getter a /= bot
+    , getter a /= getter b
+    , getter b /= top -- It's ok to go to error.
+    ]
 
 -- | A new pure LVar populated with the provided initial state.
-newPureLVar :: BoundedJoinSemiLattice t =>
-               t -> Par e s (PureLVar s t)
-newPureLVar st = WrapPar$ fmap (PureLVar . WrapLVar) $
-                 LI.newLV $ newIORef st
+newPureLVar
+  :: (BoundedJoinSemiLattice t)
+  => t
+  -> Par e s (PureLVar s t)
+newPureLVar st =
+  WrapPar $
+    fmap (PureLVar . WrapLVar) $
+      LI.newLV $
+        newIORef st
 
 -- | Blocks until the contents of `lv` are at or above one element of
 -- `thrshSet`, then returns that one element.
 getPureLVar :: (BoundedJoinSemiLattice t, Eq t, HasGet e) => PureLVar s t -> [t] -> Par e s t
 getPureLVar (PureLVar (WrapLVar lv)) thrshSet =
-  WrapPar$ LI.getLV lv globalThresh deltaThresh
-  where globalThresh ref _ = do
-          x <- readIORef ref
-          logDbgLn_ 5 "  [Pure] Getting from a Pure LVar.. read ref."
-          deltaThresh x
-        deltaThresh x =
-          return $ checkThresholds x thrshSet
+  WrapPar $ LI.getLV lv globalThresh deltaThresh
+ where
+  globalThresh ref _ = do
+    x <- readIORef ref
+    logDbgLn_ 5 "  [Pure] Getting from a Pure LVar.. read ref."
+    deltaThresh x
+  deltaThresh x =
+    return $ checkThresholds x thrshSet
 
 -- | Returns the element of thrshSet that `currentState` is above, if
 -- it exists.  (Assumes that there is only one such element!)
@@ -140,10 +197,11 @@ checkThresholds :: (BoundedJoinSemiLattice t, Eq t) => t -> [t] -> Maybe t
 -- log(N) Set.member test should be enough, not a full O(N) traversal of all states
 -- in the threshold set.
 checkThresholds currentState thrshSet = case thrshSet of
-  []               -> Nothing
-  (thrsh : thrshs) -> if thrsh `joinLeq` currentState
-                      then Just thrsh
-                      else checkThresholds currentState thrshs
+  [] -> Nothing
+  (thrsh : thrshs) ->
+    if thrsh `joinLeq` currentState
+      then Just thrsh
+      else checkThresholds currentState thrshs
 
 -- | A variant of getPureLVar that allows /equivalence classes/ of sets.
 --   All equivalence classes in a threshold set must still be pairwise incompatible.
@@ -185,44 +243,56 @@ checkThresholds currentState thrshSet = case thrshSet of
 -- | Like `getPureLVar` but uses a threshold function rather than an explicit set.
 unsafeGetPureLVar :: (BoundedJoinSemiLattice t, Eq t, HasGet e) => PureLVar s t -> (t -> Bool) -> Par e s t
 unsafeGetPureLVar (PureLVar (WrapLVar lv)) thrsh =
-  WrapPar$ LI.getLV lv globalThresh deltaThresh
-  where globalThresh ref _ = do
-          x <- readIORef ref
-          logDbgLn_ 5 "  [Pure] unsafeGetPureLVar: read the ref."
-          deltaThresh x
-        deltaThresh x =
-          return $! if thrsh x
-                    then Just x
-                    else Nothing
+  WrapPar $ LI.getLV lv globalThresh deltaThresh
+ where
+  globalThresh ref _ = do
+    x <- readIORef ref
+    logDbgLn_ 5 "  [Pure] unsafeGetPureLVar: read the ref."
+    deltaThresh x
+  deltaThresh x =
+    return $!
+      if thrsh x
+        then Just x
+        else Nothing
 
 -- | Wait until the pure LVar has crossed a threshold and then unblock.  (In the
 -- semantics, this is a singleton query set.)
-waitPureLVar :: (BoundedJoinSemiLattice t, Eq t, HasGet e) =>
-                PureLVar s t -> t -> Par e s ()
+waitPureLVar
+  :: (BoundedJoinSemiLattice t, Eq t, HasGet e)
+  => PureLVar s t
+  -> t
+  -> Par e s ()
 waitPureLVar (PureLVar (WrapLVar iv)) thrsh =
-   WrapPar$ LI.getLV iv globalThresh deltaThresh
-  where globalThresh ref _ = do
-          x <- readIORef ref
-          logDbgLn_ 5 "  [Pure] checking global thresh..."
-          deltaThresh x
-        deltaThresh x | thrsh `joinLeq` x = do logDbgLn_ 5 "  [Pure] Delta thresh met!"
-                                               return $ Just ()
-                      | otherwise         = do logDbgLn_ 5 "  [Pure] Check Delta thresh.. Not yet."
-                                               return Nothing
+  WrapPar $ LI.getLV iv globalThresh deltaThresh
+ where
+  globalThresh ref _ = do
+    x <- readIORef ref
+    logDbgLn_ 5 "  [Pure] checking global thresh..."
+    deltaThresh x
+  deltaThresh x
+    | thrsh `joinLeq` x = do
+        logDbgLn_ 5 "  [Pure] Delta thresh met!"
+        return $ Just ()
+    | otherwise = do
+        logDbgLn_ 5 "  [Pure] Check Delta thresh.. Not yet."
+        return Nothing
 
 -- | Put a new value which will be joined with the old.
-putPureLVar :: (BoundedJoinSemiLattice t, HasPut e) =>
-               PureLVar s t -> t -> Par e s ()
+putPureLVar
+  :: (BoundedJoinSemiLattice t, HasPut e)
+  => PureLVar s t
+  -> t
+  -> Par e s ()
 putPureLVar (PureLVar (WrapLVar iv)) !new =
-    WrapPar $ LI.putLV iv putter
-  where
-    -- Careful, this must be idempotent...
-    putter !ref = do
-      -- In some cases direct CAS would be better than atomicModifyIORef here.
-      logDbgLn_ 5 "  [Pure] Putting to pure LVar.."
-      atomicModifyIORef' ref $ \ oldval -> (oldval \/ new, ())
-      -- We still publish the change for delta-thresh's to respond to:
-      return $! Just $! new
+  WrapPar $ LI.putLV iv putter
+ where
+  -- Careful, this must be idempotent...
+  putter !ref = do
+    -- In some cases direct CAS would be better than atomicModifyIORef here.
+    logDbgLn_ 5 "  [Pure] Putting to pure LVar.."
+    atomicModifyIORef' ref $ \oldval -> (oldval \/ new, ())
+    -- We still publish the change for delta-thresh's to respond to:
+    return $! Just $! new
 
 -- | Register a handler that is notified of every change to a
 --   PureLVar's state, that is, every call to `putPureLVar`.
@@ -233,39 +303,39 @@ putPureLVar (PureLVar (WrapLVar iv)) !new =
 --   `PureLVar`.
 --
 --   This requirement also implies that the callback function is idempotent.
-unsafeMonotonicHandlerHP :: Maybe HandlerPool
-             -> PureLVar s t
-             -> (t -> Par e s ())
-             -> Par e s ()
+unsafeMonotonicHandlerHP
+  :: Maybe HandlerPool
+  -> PureLVar s t
+  -> (t -> Par e s ())
+  -> Par e s ()
 unsafeMonotonicHandlerHP mh (PureLVar (WrapLVar lv)) callb = WrapPar $ do
-    LI.addHandler mh lv globalCB deltaCB
+  LI.addHandler mh lv globalCB deltaCB
+  return ()
+ where
+  --    deltaCB = undefined
+  deltaCB v = return $ Just $ unWrapPar $ callb v
+  globalCB ref unlockLVar = LI.liftIO $ do
+    x <- readIORef ref -- Snapshot
+    unlockLVar -- Gets to run early because it's pure.
+    _ <- deltaCB x
     return ()
-  where
---    deltaCB = undefined
-    deltaCB v = return$ Just$ unWrapPar $ callb v
-    globalCB ref unlockLVar = LI.liftIO $ do
-       x <- readIORef ref -- Snapshot
-       unlockLVar -- Gets to run early because it's pure.
-       _ <- deltaCB x
-       return ()
-
 
 -- | Freeze the pure LVar, returning its exact value.
 --   Subsequent @put@s will raise an error.
-freezePureLVar :: HasFreeze e => PureLVar s t -> Par e s t
-freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$
-  do LI.freezeLV lv
-     LI.getLV lv globalThresh deltaThresh
-  where
-    globalThresh ref True = fmap Just $ readIORef ref
-    globalThresh _  False = return Nothing
-    deltaThresh  _        = return Nothing
+freezePureLVar :: (HasFreeze e) => PureLVar s t -> Par e s t
+freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar $
+  do
+    LI.freezeLV lv
+    LI.getLV lv globalThresh deltaThresh
+ where
+  globalThresh ref True = fmap Just $ readIORef ref
+  globalThresh _ False = return Nothing
+  deltaThresh _ = return Nothing
 
 -- | Read the exact contents of an already frozen PureLVar.
 fromPureLVar :: PureLVar Frzn t -> t
 fromPureLVar (PureLVar lv) =
   unsafeDupablePerformIO $ readIORef $ state lv
-
 
 ------------------------------------------------------------
 
@@ -276,7 +346,7 @@ instance Eq (PureLVar s v) where
 -- `PureLVar` values can be returned as the result of a
 --  `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
 --  @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
-instance DeepFrz a => DeepFrz (PureLVar s a) where
+instance (DeepFrz a) => DeepFrz (PureLVar s a) where
   -- We can't be sure that someone won't put an LVar value inside a
   -- PureLVar!  Therefore we have to apply FrzType recursively.
   type FrzType (PureLVar s a) = PureLVar Frzn (FrzType a)

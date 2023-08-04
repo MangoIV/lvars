@@ -1,71 +1,76 @@
-{-# LANGUAGE BangPatterns          #-}
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- UNFINISHED!!!
 
 -- | An array of bit-fields (numbers) with a monotonic OR operation.
-
 module Data.LVar.BoundedNatSet
-       (
-         -- * Basic operations
-         BitArray,
-         -- Snapshot(BitArraySnap),
+  ( -- * Basic operations
+    BitArray
+  -- Snapshot(BitArraySnap),
 
-         newEmptyBitArray, putBits,
-         -- waitElem, waitSize,
+  , newEmptyBitArray
+  , putBits
+  -- waitElem, waitSize,
 
-         -- -- * Iteration and callbacks
-         forEach, forEachHP
+  -- -- * Iteration and callbacks
+  , forEach
+  , forEachHP
+  -- -- * Quasi-deterministic operations
+  -- freezeSetAfter, withCallbacksThenFreeze, freezeSet,
 
-         -- -- * Quasi-deterministic operations
-         -- freezeSetAfter, withCallbacksThenFreeze, freezeSet,
+  -- -- * Higher-level derived operations
+  -- copy, traverseSet, traverseSet_, union, intersection,
+  -- cartesianProd, cartesianProds,
 
-         -- -- * Higher-level derived operations
-         -- copy, traverseSet, traverseSet_, union, intersection,
-         -- cartesianProd, cartesianProds,
-
-         -- -- * Alternate versions of derived ops that expose HandlerPools they create.
-         -- forEachHP, traverseSetHP, traverseSetHP_,
-         -- cartesianProdHP, cartesianProdsHP
-       ) where
+  -- -- * Alternate versions of derived ops that expose HandlerPools they create.
+  -- forEachHP, traverseSetHP, traverseSetHP_,
+  -- cartesianProdHP, cartesianProdsHP
+  )
+where
 
 -- import qualified Data.Vector.Unboxed as U
 -- import qualified Data.Vector.Unboxed.Mutable as M
 
-
-import           Data.Bits                              ((.&.))
-import qualified Data.Bits.Atomic                       as B
-import qualified Data.Vector.Storable                   as U
-import qualified Data.Vector.Storable.Mutable           as M
-import           Foreign.ForeignPtr                     (newForeignPtr,
-                                                         withForeignPtr)
-import           Foreign.Marshal.Alloc                  (finalizerFree)
-import           Foreign.Marshal.MissingAlloc           (callocBytes)
-import qualified Foreign.Ptr                            as P
-import           Foreign.Storable                       (Storable, sizeOf)
-
-import           Control.Monad                          (void)
-import qualified Data.Foldable                          as F
-import           Data.IORef
-import qualified Data.LVar.IVar                         as IV
-import           Data.Maybe                             (fromMaybe)
-import qualified Data.Set                               as S
-import qualified Data.Traversable                       as T
-
-import           Control.LVish                          as LV hiding
-                                                              (addHandler)
-import           Control.LVish.Internal                 as LI
-import           Internal.Control.LVish.SchedIdempotent (freezeLV,
-                                                         freezeLVAfter, getLV,
-                                                         liftIO, newLV, putLV)
+import Control.LVish as LV hiding
+  ( addHandler
+  )
+import Control.LVish.Internal as LI
+import Control.Monad (void)
+import Data.Bits ((.&.))
+import qualified Data.Bits.Atomic as B
+import qualified Data.Foldable as F
+import Data.IORef
+import qualified Data.LVar.IVar as IV
+import Data.Maybe (fromMaybe)
+import qualified Data.Set as S
+import qualified Data.Traversable as T
+import qualified Data.Vector.Storable as U
+import qualified Data.Vector.Storable.Mutable as M
+import Foreign.ForeignPtr
+  ( newForeignPtr
+  , withForeignPtr
+  )
+import Foreign.Marshal.Alloc (finalizerFree)
+import Foreign.Marshal.MissingAlloc (callocBytes)
+import qualified Foreign.Ptr as P
+import Foreign.Storable (Storable, sizeOf)
+import Internal.Control.LVish.SchedIdempotent
+  ( freezeLV
+  , freezeLVAfter
+  , getLV
+  , liftIO
+  , newLV
+  , putLV
+  )
 import qualified Internal.Control.LVish.SchedIdempotent as L
 
 ------------------------------------------------------------------------------
@@ -73,7 +78,7 @@ import qualified Internal.Control.LVish.SchedIdempotent as L
 -- | An array of bit-fields with a monotonic OR operation.  This can be used to model
 --   a set of Ints by setting the vector entries to zero or one, but it can also
 --   model other finite lattices for each index.
-newtype BitArray s a = BitArray (LVar s (M.IOVector a) (Int,a))
+newtype BitArray s a = BitArray (LVar s (M.IOVector a) (Int, a))
 
 unBitArray (BitArray lv) = lv
 
@@ -93,13 +98,15 @@ instance LVarData1 BitArray where
 
 -}
 
-
 -- | Create a new, empty, monotonically growing 'BitArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
-newEmptyBitArray :: forall elt d s . Storable elt =>
-                    Int -> Par d s (BitArray s elt)
+newEmptyBitArray
+  :: forall elt d s
+   . (Storable elt)
+  => Int
+  -> Par d s (BitArray s elt)
 newEmptyBitArray len = WrapPar $ fmap (BitArray . WrapLVar) $ newLV $ do
-  let bytes = sizeOf (undefined::elt) * len
+  let bytes = sizeOf (undefined :: elt) * len
   mem <- callocBytes bytes
   fp <- newForeignPtr finalizerFree mem
   return $! M.unsafeFromForeignPtr0 fp len
@@ -160,69 +167,95 @@ freezeSet (BitArray (WrapLVar lv)) = WrapPar $
 -}
 
 {-# INLINE forEachHP #-}
+
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set, optionally enrolled in a handler pool
-forEachHP :: Storable a =>
-             Maybe HandlerPool           -- ^ pool to enroll in, if any
-          -> BitArray s a                -- ^ Set to listen to
-          -> (Int -> a -> Par d s ())           -- ^ callback
-          -> Par d s ()
+forEachHP
+  :: (Storable a)
+  => Maybe HandlerPool
+  -- ^ pool to enroll in, if any
+  -> BitArray s a
+  -- ^ Set to listen to
+  -> (Int -> a -> Par d s ())
+  -- ^ callback
+  -> Par d s ()
 forEachHP hp (BitArray (WrapLVar lv)) callb = WrapPar $ do
-    L.addHandler hp lv globalCB deltaCB
-    return ()
-  where
-    deltaCB (ix,x) = return$ Just$ unWrapPar$ callb ix x
-    globalCB vec = return$ Just$ unWrapPar$
-      -- FIXME / TODO: need a better (parallel) for loop:
-      forVec vec $ \ ix elm ->
-        forkHP hp $ callb ix elm
+  L.addHandler hp lv globalCB deltaCB
+  return ()
+ where
+  deltaCB (ix, x) = return $ Just $ unWrapPar $ callb ix x
+  globalCB vec = return $
+    Just $
+      unWrapPar $
+        -- FIXME / TODO: need a better (parallel) for loop:
+        forVec vec $ \ix elm ->
+          forkHP hp $ callb ix elm
 
 {-# INLINE forVec #-}
+
 -- | Simple for-each loops over vector elements.
-forVec :: Storable a =>
-          M.IOVector a -> (Int -> a -> Par d s ()) -> Par d s ()
+forVec
+  :: (Storable a)
+  => M.IOVector a
+  -> (Int -> a -> Par d s ())
+  -> Par d s ()
 forVec vec fn = loop 0
-  where
-    len = M.length vec
-    loop i | i == len = return ()
-           | otherwise = do elm <- LI.liftIO$ M.unsafeRead vec i
-                            fn i elm
-                            loop (i+1)
+ where
+  len = M.length vec
+  loop i
+    | i == len = return ()
+    | otherwise = do
+        elm <- LI.liftIO $ M.unsafeRead vec i
+        fn i elm
+        loop (i + 1)
 
 {-# INLINE forEach #-}
+
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set
-forEach :: Storable a => BitArray s a -> (Int -> a -> Par d s ()) -> Par d s ()
+forEach :: (Storable a) => BitArray s a -> (Int -> a -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing
-
 
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.
-putBits :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
-           Int -> elt -> BitArray s elt -> Par d s ()
-putBits !ix !elm (BitArray (WrapLVar lv)) = WrapPar$ putLV lv (putter ix)
-  where putter ix vec@(M.MVector offset fptr) =
-          withForeignPtr fptr $ \ ptr -> do
-            let offset = sizeOf (undefined::elt) * ix
-            orig <- B.fetchAndOr (P.plusPtr ptr offset) elm
-            if orig .&. elm == 0 -- If those bits were not already set....
---              then return (Just (ix,elm))
-              then return (Just (ix, elm .|. orig))
-              else return Nothing
+putBits
+  :: forall s d elt
+   . (Storable elt, B.AtomicBits elt, Num elt)
+  => Int
+  -> elt
+  -> BitArray s elt
+  -> Par d s ()
+putBits !ix !elm (BitArray (WrapLVar lv)) = WrapPar $ putLV lv (putter ix)
+ where
+  putter ix vec@(M.MVector offset fptr) =
+    withForeignPtr fptr $ \ptr -> do
+      let offset = sizeOf (undefined :: elt) * ix
+      orig <- B.fetchAndOr (P.plusPtr ptr offset) elm
+      if orig .&. elm == 0 -- If those bits were not already set....
+      --              then return (Just (ix,elm))
+        then return (Just (ix, elm .|. orig))
+        else return Nothing
 
 -- | Wait for an indexed entry to contain ANY of a certain set of bits.
-waitBits :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
-            Int -> a -> BitArray s a -> Par d s ()
-waitBits !elm (BitArray (WrapLVar lv)) = WrapPar $
+waitBits
+  :: forall s d elt
+   . (Storable elt, B.AtomicBits elt, Num elt)
+  => Int
+  -> a
+  -> BitArray s a
+  -> Par d s ()
+waitBits !elm (BitArray (WrapLVar lv)) =
+  WrapPar $
     getLV lv globalThresh deltaThresh
-  where
-    globalThresh ref _frzn = do
-      set <- readIORef ref
-      case S.member elm set of
-        True  -> return (Just ())
-        False -> return (Nothing)
-    deltaThresh e2 | e2 == elm = return $ Just ()
-                   | otherwise  = return Nothing
+ where
+  globalThresh ref _frzn = do
+    set <- readIORef ref
+    case S.member elm set of
+      True -> return (Just ())
+      False -> return (Nothing)
+  deltaThresh e2
+    | e2 == elm = return $ Just ()
+    | otherwise = return Nothing
 
 -- Wait for it to contain ALL of a certain set of bits.
 -- waitBitsAnd
@@ -342,7 +375,6 @@ instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b) =>
       return y
 
  -}
-
 
 {-
 parFor :: (ParFuture iv p) => InclusiveRange -> (Int -> p ()) -> p ()

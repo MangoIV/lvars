@@ -1,12 +1,11 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE ConstraintKinds     #-}
-{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
-
 module CtrieMapTests where
 
 -- import qualified Data.LVar.SLSet as IS
@@ -19,7 +18,7 @@ type TheMap k s v = IM.IMap k s v
 --------------------------------------------------------------------------------
 
 tests :: TestTree
-tests = testGroup "" [tests_here, tests_common ]
+tests = testGroup "" [tests_here, tests_common]
 
 tests_here :: TestTree
 tests_here = $(testGroupGenerator)

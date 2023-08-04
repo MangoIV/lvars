@@ -1,30 +1,39 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE Trustworthy #-}
-
-{-# LANGUAGE DataKinds, BangPatterns, MagicHash #-}
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-} 
--- | A positive integer LVar that contains the maximum value of all `put`s.
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 -- TODO: Add 'Min', 'Or', 'And' and other idempotent ops...
 
+-- | A positive integer LVar that contains the maximum value of all `put`s.
 module Data.LVar.MaxPosInt
-       ( MaxPosInt,
-         newMaxPosInt, put, waitThresh, freezeMaxPosInt, fromMaxPosInt
-       ) where
+  ( MaxPosInt
+  , newMaxPosInt
+  , put
+  , waitThresh
+  , freezeMaxPosInt
+  , fromMaxPosInt
+  )
+where
 
+import Algebra.Lattice
 import Control.LVish hiding (freeze, put)
-import Control.LVish.Internal (state)
 import Control.LVish.DeepFrz.Internal
+import Control.LVish.Internal (state)
 import Data.IORef
 import Data.LVar.Generic
 import Data.LVar.Internal.Pure as P
-import Algebra.Lattice
-import           System.IO.Unsafe  (unsafeDupablePerformIO)
-import           GHC.Prim (unsafeCoerce#)
+import GHC.Prim (unsafeCoerce#)
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
 --------------------------------------------------------------------------------
 
 -- | A @MaxPosInt@ is really a constant-space ongoing @fold max@ operation.
--- 
+--
 -- A @MaxPosInt@ is an example of a `PureLVar`.  It is implemented simply as a
 -- pure value in a mutable box.
 type MaxPosInt s = PureLVar s MC
@@ -32,7 +41,7 @@ type MaxPosInt s = PureLVar s MC
 newtype MC = MC Int
   deriving (Eq, Show, Ord, Read)
 
-instance JoinSemiLattice MC where 
+instance JoinSemiLattice MC where
   join (MC !a) (MC !b) = MC (a `max` b)
 
 instance BoundedJoinSemiLattice MC where
@@ -44,15 +53,15 @@ newMaxPosInt n = newPureLVar (MC n)
 
 -- | Incorporate a new value in the max-fold.  If the previous maximum is less than
 -- the new value, increase it.
-put :: HasPut e => MaxPosInt s -> Int -> Par e s ()
+put :: (HasPut e) => MaxPosInt s -> Int -> Par e s ()
 put lv n = putPureLVar lv (MC n)
 
 -- | Wait until the maximum observed value reaches some threshold, then return.
-waitThresh :: HasGet e => MaxPosInt s -> Int -> Par e s ()
+waitThresh :: (HasGet e) => MaxPosInt s -> Int -> Par e s ()
 waitThresh lv n = waitPureLVar lv (MC n)
 
 -- | Observe what the final value of the `MaxPosInt` was.
-freezeMaxPosInt :: HasFreeze e => MaxPosInt s -> Par e s Int
+freezeMaxPosInt :: (HasFreeze e) => MaxPosInt s -> Par e s Int
 freezeMaxPosInt lv = do
   MC n <- freezePureLVar lv
   return n
@@ -65,4 +74,4 @@ fromMaxPosInt (PureLVar lv) =
     MC n -> n
 
 instance DeepFrz MC where
-   type FrzType MC = MC
+  type FrzType MC = MC

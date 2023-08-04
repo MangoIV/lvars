@@ -1,80 +1,91 @@
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Trustworthy         #-}
-{-# LANGUAGE TypeFamilies        #-}
--- {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE BangPatterns #-}
 -- {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+-- {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE TypeFamilies #-}
 
-{-|
-
-  Saturating maps.  These store pure (joinable) values, but when a
-  join fails the map fails (saturates), after which it requires only a
-  small, constant amount of memory.
-
--- FIXME: we need effect signatures on all methods! - RRN [2014.10.21]
-
- -}
-
+-- |
+--
+--   Saturating maps.  These store pure (joinable) values, but when a
+--   join fails the map fails (saturates), after which it requires only a
+--   small, constant amount of memory.
+--
+-- -- FIXME: we need effect signatures on all methods! - RRN [2014.10.21]
 module Data.LVar.SatMap
-       (
-         -- * Basic operations
-         SatMap(..),
-         newEmptyMap, newMap, newFromList,
-         insert, saturate,
+  ( -- * Basic operations
+    SatMap (..)
+  , newEmptyMap
+  , newMap
+  , newFromList
+  , insert
+  , saturate
+  -- NOT sure about how handlers might work for saturating LVars yet...
+  -- It's possible that they can operate only with idempotent callbacks
+  -- and be nondeterministic in whether they guarantee duplicate-suppression.
 
--- NOT sure about how handlers might work for saturating LVars yet...
--- It's possible that they can operate only with idempotent callbacks
--- and be nondeterministic in whether they guarantee duplicate-suppression.
+    -- * Deterministic operations
+  , copy
 
-         -- * Deterministic operations
-         copy,
-
-         -- * Quasi-deterministic operations
-         forEachHP, fromIMap -- , freezeMap
-       ) where
+    -- * Quasi-deterministic operations
+  , forEachHP
+  , fromIMap -- , freezeMap
+  )
+where
 
 -- import           Algebra.Lattice
 -- import           Algebra.Lattice.Dropped
-import           Control.LVish
-import           Control.LVish.DeepFrz                  (runParThenFreeze)
-import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.Internal                 as LI
-import           Control.LVish.Internal.SchedIdempotent (freezeLV,
-                                                         freezeLVAfter, getLV,
-                                                         newLV, putLV, putLV_)
-import qualified Control.LVish.Internal.SchedIdempotent as L
-import           Data.LVar.Generic                      as G
-import qualified Data.LVar.IVar                         as IV
+
 -- import           Data.LVar.SatMap.Unsafe
-import           Data.LVar.FiltSet                      (AFoldableOrd (..),
-                                                         SaturatingLVar (..))
-import           Data.UtilInternal                      (traverseWithKey_)
 
-import           Control.Exception                      (throw)
-import           Data.IORef
-import           Data.List                              (intercalate)
-import qualified Data.Map.Strict                        as M
-import           Data.Maybe                             (isJust)
-import           System.IO.Unsafe                       (unsafeDupablePerformIO,
-                                                         unsafePerformIO)
-import           System.Mem.StableName                  (hashStableName,
-                                                         makeStableName)
-
-import           Control.Applicative                    ((<$>))
-import qualified Data.Foldable                          as F
-import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
-
+import Control.Applicative ((<$>))
+import Control.Exception (throw)
+import Control.LVish
+import Control.LVish.DeepFrz (runParThenFreeze)
+import Control.LVish.DeepFrz.Internal
+import Control.LVish.Internal as LI
+import Control.LVish.Internal.SchedIdempotent
+  ( freezeLV
+  , freezeLVAfter
+  , getLV
+  , newLV
+  , putLV
+  , putLV_
+  )
+import qualified Control.LVish.Internal.SchedIdempotent as L
 -- From here we get a Generator and, in the future, ParFoldable instance for Map:
-import           Data.Par.Map                           ()
 
-import qualified Control.Par.Class                      as PC
-import           Control.Par.Class.Unsafe               (internalLiftIO)
+import qualified Control.Par.Class as PC
+import Control.Par.Class.Unsafe (internalLiftIO)
+import qualified Data.Foldable as F
+import Data.IORef
+import Data.LVar.FiltSet
+  ( AFoldableOrd (..)
+  , SaturatingLVar (..)
+  )
+import Data.LVar.Generic as G
+import Data.LVar.Generic.Internal (unsafeCoerceLVar)
+import qualified Data.LVar.IVar as IV
+import Data.List (intercalate)
+import qualified Data.Map.Strict as M
+import Data.Maybe (isJust)
+import Data.Par.Map ()
+import Data.UtilInternal (traverseWithKey_)
+import System.IO.Unsafe
+  ( unsafeDupablePerformIO
+  , unsafePerformIO
+  )
+import System.Mem.StableName
+  ( hashStableName
+  , makeStableName
+  )
+
 -- import qualified Data.Splittable.Class as Sp
 -- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
 
@@ -88,9 +99,10 @@ import           Control.Par.Class.Unsafe               (internalLiftIO)
 --
 -- Performance note: There is only /one/ mutable location in this implementation.  Thus
 -- it is not a scalable implementation.
-newtype SatMap k s v = SatMap (LVar s (IORef (SatMapContents k v)) (k,v))
-     -- SatMap { lvar  :: (LVar s (IORef (Maybe (M.Map k v))) (k,v))
-     --        , onSat :: L.Par () }
+newtype SatMap k s v = SatMap (LVar s (IORef (SatMapContents k v)) (k, v))
+
+-- SatMap { lvar  :: (LVar s (IORef (Maybe (M.Map k v))) (k,v))
+--        , onSat :: L.Par () }
 
 type SatMapContents k v = Maybe (M.Map k v, OnSat)
 
@@ -110,13 +122,14 @@ instance (Ord k, Ord v) => Ord (SatMap k Frzn v) where
 -- | An `SatMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 (SatMap k) where
-  freeze orig@(SatMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
+  freeze orig@(SatMap (WrapLVar lv)) = WrapPar $ do freezeLV lv; return (unsafeCoerceLVar orig)
+
   -- Unlike the Map-specific forEach variants, this takes only values, not keys.
-  addHandler mh mp fn = (unsafeForEachHP mh mp (\ _k v -> fn v)) -- WARNING!  NOT VALID
+  addHandler mh mp fn = (unsafeForEachHP mh mp (\_k v -> fn v)) -- WARNING!  NOT VALID
   sortFrzn (SatMap lv) =
     case unsafeDupablePerformIO (readIORef (state lv)) of
-      Nothing    -> AFoldable [] -- Map saturated, contents are empty.
-      Just (m,_) -> AFoldable m
+      Nothing -> AFoldable [] -- Map saturated, contents are empty.
+      Just (m, _) -> AFoldable m
 
 -- | The `SatMap`s in this module also have the special property that they support an
 -- /O(1)/ freeze operation which immediately yields a `Foldable` container
@@ -129,10 +142,10 @@ instance OrderedLVarData1 (SatMap k) where
 -- `Trvrsbl`.
 instance F.Foldable (SatMap k Frzn) where
   foldr fn zer (SatMap lv) =
-    let mp = unsafeDupablePerformIO (readIORef (state lv)) in
-    case mp of
-      Nothing    -> zer
-      Just (m,_) -> F.foldr fn zer m
+    let mp = unsafeDupablePerformIO (readIORef (state lv))
+     in case mp of
+          Nothing -> zer
+          Just (m, _) -> F.foldr fn zer m
 
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (SatMap k Trvrsbl) where
@@ -141,8 +154,8 @@ instance F.Foldable (SatMap k Trvrsbl) where
 -- `SatMap` values can be returned as the result of a
 --  `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
 --  @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
-instance DeepFrz a => DeepFrz (SatMap k s a) where
---   type FrzType (SatMap k s a) = SatMap k Frzn (FrzType a)
+instance (DeepFrz a) => DeepFrz (SatMap k s a) where
+  --   type FrzType (SatMap k s a) = SatMap k Frzn (FrzType a)
   type FrzType (SatMap k s a) = SatMap k Frzn a -- No need to recur deeper.
   frz = unsafeCoerceLVar
 
@@ -150,14 +163,13 @@ instance (Show k, Show a) => Show (SatMap k Frzn a) where
   show (SatMap lv) =
     let mp' = unsafeDupablePerformIO (readIORef (state lv))
         contents = case mp' of
-                     Nothing    -> "saturated"
-                     Just (m,_) -> intercalate ", " $ map show $ M.toList m
-    in "{SatMap: " ++ contents ++ "}"
+          Nothing -> "saturated"
+          Just (m, _) -> intercalate ", " $ map show $ M.toList m
+     in "{SatMap: " ++ contents ++ "}"
 
 -- | For convenience only; the user could define this.
 instance (Show k, Show a) => Show (SatMap k Trvrsbl a) where
   show lv = show (castFrzn lv)
-
 
 -- | Add an (asynchronous) callback that listens for all new key/value pairs added to
 -- the map, optionally enrolled in a handler pool.
@@ -165,39 +177,47 @@ instance (Show k, Show a) => Show (SatMap k Trvrsbl a) where
 -- This function must be called BEFORE the LVar saturates.  Note, it
 -- is QUASIDETERMINISTIC, because there could be a race between a
 -- saturating put and registering the handler.
-forEachHP :: (HasFreeze e) =>
-             Maybe HandlerPool           -- ^ optional pool to enroll in
-          -> SatMap k s v                  -- ^ Map to listen to
-          -> (k -> v -> Par e s ())      -- ^ callback
-          -> Par e s ()
+forEachHP
+  :: (HasFreeze e)
+  => Maybe HandlerPool
+  -- ^ optional pool to enroll in
+  -> SatMap k s v
+  -- ^ Map to listen to
+  -> (k -> v -> Par e s ())
+  -- ^ callback
+  -> Par e s ()
 forEachHP mh sm@(SatMap lv) callb = do
   unsafeForEachHP mh sm callb
   x <- liftIO $ readIORef (state lv)
   case x of
     Nothing -> throw (PutAfterFreezeExn "SatMap: forEachHP may have raced with saturating Put")
-    Just _  -> return ()
-
+    Just _ -> return ()
 
 -- | Add an (asynchronous) callback that listens for all new key/value pairs added to
 -- the map, optionally enrolled in a handler pool.
 --
 -- WARNING! When the LVar saturates, this becomes useless.  This must
 -- be called at a time definitively BEFORE the LVar saturates.
-unsafeForEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
-          -> SatMap k s v                  -- ^ Map to listen to
-          -> (k -> v -> Par d s ())      -- ^ callback
-          -> Par d s ()
+unsafeForEachHP
+  :: Maybe HandlerPool
+  -- ^ optional pool to enroll in
+  -> SatMap k s v
+  -- ^ Map to listen to
+  -> (k -> v -> Par d s ())
+  -- ^ callback
+  -> Par d s ()
 unsafeForEachHP mh (SatMap (WrapLVar lv)) callb = WrapPar $ do
-    L.addHandler mh lv globalCB deltaCB
-    return ()
-  where
-    deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
-    globalCB ref = do
-      mp <- L.liftIO $ readIORef ref -- Snapshot
-      case mp of
-        Nothing -> return () -- Already saturated, nothing to do.
-        Just (m,_) -> unWrapPar $
-                      traverseWithKey_ (\ k v -> forkHP mh$ callb k v) m
+  L.addHandler mh lv globalCB deltaCB
+  return ()
+ where
+  deltaCB (k, v) = return $ Just $ unWrapPar $ callb k v
+  globalCB ref = do
+    mp <- L.liftIO $ readIORef ref -- Snapshot
+    case mp of
+      Nothing -> return () -- Already saturated, nothing to do.
+      Just (m, _) ->
+        unWrapPar $
+          traverseWithKey_ (\k v -> forkHP mh $ callb k v) m
 
 -- TODO: forEachNeverSat -- make forEach deterministic when you are
 -- willing to bet that a particular SatMap will NEVER saturate.
@@ -206,122 +226,145 @@ unsafeForEachHP mh (SatMap (WrapLVar lv)) callb = WrapPar $ do
 
 -- | Create a fresh map with nothing in it.
 newEmptyMap :: Par d s (SatMap k s v)
-newEmptyMap = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef (Just (M.empty, return ()))
+newEmptyMap = WrapPar $ fmap (SatMap . WrapLVar) $ newLV $ newIORef (Just (M.empty, return ()))
 
 -- | Create a new map populated with initial elements.
 newMap :: M.Map k v -> Par d s (SatMap k s v)
-newMap m = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef (Just (m,return()))
+newMap m = WrapPar $ fmap (SatMap . WrapLVar) $ newLV $ newIORef (Just (m, return ()))
 
 -- | A convenience function that is equivalent to calling `Data.Map.fromList`
 -- followed by `newMap`.
-newFromList :: (Ord k, Eq v) =>
-               [(k,v)] -> Par d s (SatMap k s v)
+newFromList
+  :: (Ord k, Eq v)
+  => [(k, v)]
+  -> Par d s (SatMap k s v)
 newFromList = newMap . M.fromList
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
-                           SatMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
+withCallbacksThenFreeze
+  :: forall k v b s e
+   . (HasPut e, HasGet e, HasFreeze e, Eq b)
+  => SatMap k s v
+  -> (k -> v -> Par e s ())
+  -> Par e s b
+  -> Par e s b
 -- FIXME: needs to follow the same policy as forEach -- ERROR if it
 -- saturates before this is finished.
 withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
-    do hp  <- newPool
-       res <- IV.new
-       WrapPar$ freezeLVAfter lv (initCB hp res) deltaCB
-       -- We additionally have to quiesce here because we fork the inital set of
-       -- callbacks on their own threads:
-       quiesce hp
-       IV.get res
-  where
-    deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
-    initCB :: HandlerPool -> IV.IVar s b -> IORef (SatMapContents k v) -> L.Par ()
-    initCB hp resIV ref = do
-      -- The implementation guarantees that all elements will be caught either here,
-      -- or by the delta-callback:
-      mp <- L.liftIO $ readIORef ref -- Snapshot
-      case mp of
-        Nothing -> return () -- Already saturated, nothing to do.
-        Just (m,_) -> unWrapPar $ do
-                    traverseWithKey_ (\ k v -> forkHP (Just hp)$ callback k v) m
-                    res <- action -- Any additional puts here trigger the callback.
-                    IV.put_ resIV res
+  do
+    hp <- newPool
+    res <- IV.new
+    WrapPar $ freezeLVAfter lv (initCB hp res) deltaCB
+    -- We additionally have to quiesce here because we fork the inital set of
+    -- callbacks on their own threads:
+    quiesce hp
+    IV.get res
+ where
+  deltaCB (k, v) = return $ Just $ unWrapPar $ callback k v
+  initCB :: HandlerPool -> IV.IVar s b -> IORef (SatMapContents k v) -> L.Par ()
+  initCB hp resIV ref = do
+    -- The implementation guarantees that all elements will be caught either here,
+    -- or by the delta-callback:
+    mp <- L.liftIO $ readIORef ref -- Snapshot
+    case mp of
+      Nothing -> return () -- Already saturated, nothing to do.
+      Just (m, _) -> unWrapPar $ do
+        traverseWithKey_ (\k v -> forkHP (Just hp) $ callback k v) m
+        res <- action -- Any additional puts here trigger the callback.
+        IV.put_ resIV res
 
 -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
 --
 --   If a key is inserted multiple times, the values had
 --   better be compatible @joinMaybe@, or the map becomes "Saturated".
-insert :: (Ord k, G.PartialJoinSemiLattice v, Eq v) =>
-          k -> v -> SatMap k s v -> Par d s ()
-insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
-    -- OPTIONAL: Take the fast path if it is saturated:
-    snap <- L.liftIO (readIORef (L.state lv))
-    case snap of
-      Nothing -> return () -- Fizzle.
-      Just _  -> putLV_ lv putter
-  where -- putter :: _ -> L.Par (Maybe d,b)
-        putter ref = do
-          -- TODO: try optimistic CAS version.
-          (x,act) <- L.liftIO$ atomicModifyIORef' ref update
-          case act of
-            Nothing -> return ()
-            Just a  -> do L.logStrLn 5 $ " [SatMap] insert saturated lvar "++lvid++", running callback."
-                          a
-                          L.logStrLn 5 $ " [SatMap] lvar "++lvid++", saturation callback completed."
-          return (x,())
+insert
+  :: (Ord k, G.PartialJoinSemiLattice v, Eq v)
+  => k
+  -> v
+  -> SatMap k s v
+  -> Par d s ()
+insert !key !elm (SatMap (WrapLVar lv)) = WrapPar $ do
+  -- OPTIONAL: Take the fast path if it is saturated:
+  snap <- L.liftIO (readIORef (L.state lv))
+  case snap of
+    Nothing -> return () -- Fizzle.
+    Just _ -> putLV_ lv putter
+ where
+  -- putter :: _ -> L.Par (Maybe d,b)
+  putter ref = do
+    -- TODO: try optimistic CAS version.
+    (x, act) <- L.liftIO $ atomicModifyIORef' ref update
+    case act of
+      Nothing -> return ()
+      Just a -> do
+        L.logStrLn 5 $ " [SatMap] insert saturated lvar " ++ lvid ++ ", running callback."
+        a
+        L.logStrLn 5 $ " [SatMap] lvar " ++ lvid ++ ", saturation callback completed."
+    return (x, ())
 
-        lvid = L.lvarDbgName lv
+  lvid = L.lvarDbgName lv
 
-        delt x = (x,Nothing)
-        update Nothing = (Nothing,delt Nothing) -- Ignored on saturated LVar.
-        update orig@(Just (mp,onsat)) =
-          case M.lookup key mp of  -- A bit painful... double lookup on normal inserts.
-            Nothing -> (Just (M.insert key elm mp, onsat),
-                        delt (Just (key,elm)))
-            Just oldVal ->
-              case joinMaybe elm oldVal of
-                Just newVal -> if newVal == oldVal
-                               then (orig, delt Nothing) -- No change
-                               else (Just (M.insert key newVal mp, onsat),
-                                     delt (Just (key,newVal)))
-                Nothing -> -- Here we SATURATE!
-                           (Nothing, (Nothing, Just onsat))
+  delt x = (x, Nothing)
+  update Nothing = (Nothing, delt Nothing) -- Ignored on saturated LVar.
+  update orig@(Just (mp, onsat)) =
+    case M.lookup key mp of -- A bit painful... double lookup on normal inserts.
+      Nothing ->
+        ( Just (M.insert key elm mp, onsat)
+        , delt (Just (key, elm))
+        )
+      Just oldVal ->
+        case joinMaybe elm oldVal of
+          Just newVal ->
+            if newVal == oldVal
+              then (orig, delt Nothing) -- No change
+              else
+                ( Just (M.insert key newVal mp, onsat)
+                , delt (Just (key, newVal))
+                )
+          Nothing ->
+            -- Here we SATURATE!
+            (Nothing, (Nothing, Just onsat))
 
-instance Ord k => SaturatingLVar (SatMap k) where
+instance (Ord k) => SaturatingLVar (SatMap k) where
   whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do
     L.logStrLn 5 " [SatMap] whenSat issuing atomicModifyIORef on state"
     x <- L.liftIO $ atomicModifyIORef' (state lv) fn
     case x of
       Nothing -> L.logStrLn 5 " [SatMap] whenSat: not yet saturated, registered only."
-      Just a  -> do L.logStrLn 5 " [SatMap] whenSat invoking saturation callback..."
-                    a
+      Just a -> do
+        L.logStrLn 5 " [SatMap] whenSat invoking saturation callback..."
+        a
    where
     fn :: SatMapContents k v -> (SatMapContents k v, Maybe (L.Par ()))
     -- In this case we register newact to execute later:
-    fn (Just (mp,onsat)) = let onsat' = onsat >> newact in
-                           (Just (mp,onsat'), Nothing)
+    fn (Just (mp, onsat)) =
+      let onsat' = onsat >> newact
+       in (Just (mp, onsat'), Nothing)
     -- In this case we execute newact right away:
     fn Nothing = (Nothing, Just newact)
 
   saturate (SatMap lv) = WrapPar $ do
-     let lvid = L.lvarDbgName $ unWrapLVar lv
-     L.logStrLn 5 $ " [SatMap] saturate: explicity saturating lvar "++lvid
-     act <- L.liftIO $ atomicModifyIORef' (state lv) fn
-     case act of
-       Nothing -> L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++", no callbacks to invoke."
-       Just a  -> do L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++".  Now invoking callback."
-                     a
+    let lvid = L.lvarDbgName $ unWrapLVar lv
+    L.logStrLn 5 $ " [SatMap] saturate: explicity saturating lvar " ++ lvid
+    act <- L.liftIO $ atomicModifyIORef' (state lv) fn
+    case act of
+      Nothing -> L.logStrLn 5 $ " [SatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
+      Just a -> do
+        L.logStrLn 5 $ " [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback."
+        a
    where
-    fn (Just (mp,onsat)) = (Nothing, Just onsat)
-    fn Nothing           = (Nothing,Nothing)
+    fn (Just (mp, onsat)) = (Nothing, Just onsat)
+    fn Nothing = (Nothing, Nothing)
 
   unsafeIsSat (SatMap lv) = unsafeDupablePerformIO $ do
     contents <- readIORef $ state lv
     return $ not $ isJust contents
 
   finalizeOrd sm = case fromIMap sm of
-                     Nothing -> Nothing
-                     Just m  -> Just $ AFoldableOrd m
+    Nothing -> Nothing
+    Just m -> Just $ AFoldableOrd m
 
 {-
 
@@ -366,31 +409,31 @@ fromIMap :: SatMap k Frzn a -> Maybe (M.Map k a)
 fromIMap (SatMap lv) = unsafeDupablePerformIO $ do
   x <- readIORef (state lv)
   case x of
-    Just (m,_) -> return (Just m)
-    Nothing    -> return Nothing
+    Just (m, _) -> return (Just m)
+    Nothing -> return Nothing
 
 -- | Return a fresh map which will contain at least as much data as
 -- the input map.  That is, things put in the former go in the latter,
 -- but not vice versa.
-copy :: (G.PartialJoinSemiLattice v, Ord k, Eq v)
-     => SatMap k s v -> Par d s (SatMap k s v)
+copy
+  :: (G.PartialJoinSemiLattice v, Ord k, Eq v)
+  => SatMap k s v
+  -> Par d s (SatMap k s v)
 copy sm = do
   nm <- newEmptyMap
   whenSat sm (saturate nm)
-  unsafeForEachHP Nothing sm $ \ k x ->
+  unsafeForEachHP Nothing sm $ \k x ->
     insert k x nm
   return nm
 
-  -- IM.forEach cmapContents $ \ key (CVar newCV) -> do
-  --   dbgMsg ("Registering handler on CVar: "++show (unsafeName newCV)++", for var "++show key)
-  --   unsafeMonotonicHandlerHP Nothing newCV $ \ newVal ->
-  --     IM.gmodify mp2 key $ \ (CVar lv) -> do
-  --       dbgMsg ("  ~~> propagating change to var "++show key++" from wrld "++
-  --               show (cmapID orig)++" to "++show wid++"\n"++
-  --               "      newval: " ++show newVal)
-  --       putPureLVar lv newVal
-
-
+-- IM.forEach cmapContents $ \ key (CVar newCV) -> do
+--   dbgMsg ("Registering handler on CVar: "++show (unsafeName newCV)++", for var "++show key)
+--   unsafeMonotonicHandlerHP Nothing newCV $ \ newVal ->
+--     IM.gmodify mp2 key $ \ (CVar lv) -> do
+--       dbgMsg ("  ~~> propagating change to var "++show key++" from wrld "++
+--               show (cmapID orig)++" to "++show wid++"\n"++
+--               "      newval: " ++show newVal)
+--       putPureLVar lv newVal
 
 {-
 
@@ -473,7 +516,6 @@ unsafeName x = unsafePerformIO $ do
 --------------------------------------------------------------------------------
 -- Interfaces for generic programming with containers:
 
-
 instance PC.Generator (SatMap k Frzn a) where
   type ElemOf (SatMap k Frzn a) = (k,a)
   {-# INLINE fold #-}
@@ -487,7 +529,6 @@ instance PC.Generator (SatMap k Frzn a) where
 -- instance.
 -- instance Show k => PC.ParFoldable (SatMap k Frzn a) where
 
-
 -}
 
 ----------------------------------------
@@ -497,14 +538,14 @@ instance PC.Generator (SatMap k Frzn a) where
 t0 :: SatMap String Frzn Int
 t0 = runParThenFreeze $ isDet $ do
   m <- newEmptyMap
-  insert "hi" (32::Int) m
-  insert "hi" (34::Int) m
-  insert "there" (1::Int) m
+  insert "hi" (32 :: Int) m
+  insert "hi" (34 :: Int) m
+  insert "there" (1 :: Int) m
   return m
 
 t1 :: SatMap String Frzn Int
 t1 = runParThenFreeze $ isDet $ do
   m <- newEmptyMap
-  insert "hi" (32::Int) m
-  insert "hi" (33::Int) m
+  insert "hi" (32 :: Int) m
+  insert "hi" (33 :: Int) m
   return m

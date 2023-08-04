@@ -1,13 +1,12 @@
 -- | Minimum spanning forests in LVish
-
 module Data.LVar.Graph.MSF where
 
-import           Control.LVish
-import           Control.Monad
-import           Data.Graph.Adjacency as Adj
+import Control.LVish
+import Control.Monad
+import Data.Graph.Adjacency as Adj
 import qualified Data.LVar.IStructure as IS
-import qualified Data.LVar.SLMap      as SLM
-import qualified Data.Vector.Unboxed  as U
+import qualified Data.LVar.SLMap as SLM
+import qualified Data.Vector.Unboxed as U
 
 --- A NodeInfo is a 2-element array. First element is parentID, second element is rank
 --- Taking advantage of the fact that: type of parentID = Adj.NodeID = Int = type of rank
@@ -27,22 +26,20 @@ make_set nd = do
   ni <- IS.newIStructure 2
   IS.put ni 0 nd >> return ni
 
-
 -- Implements "union by rank", where the rank approximates subtree size
 
 union :: DisjointSet s -> NodeID -> NodeID -> Par e s ()
 union ds x y = do
-  [px,py] <- mapM (find_set ds) [x,y]
+  [px, py] <- mapM (find_set ds) [x, y]
   rankPx <- SLM.getKey px ds >>= rank
   rankPy <- SLM.getKey py ds >>= rank
   if rankPx > rankPy
     then SLM.modify ds py (make_set py) $ update_parent px
     else SLM.modify ds px (make_set px) $ update_parent py
   when (rankPx == rankPy) $ do
-       SLM.modify ds py (make_set py) $ update_rank (rankPy + 1)
-       return ()
+    SLM.modify ds py (make_set py) $ update_rank (rankPy + 1)
+    return ()
   return ()
-
 
 -- Implements path compression
 
@@ -56,7 +53,6 @@ find_set ds nd = do
     return ()
   SLM.getKey nd ds >>= parent
 
-
 -- Both types of updates return a new NodeInfo since multiple puts are not allowed
 
 update_parent :: NodeID -> NodeInfo s -> Par e s (NodeInfo s)
@@ -69,24 +65,23 @@ update_rank r info = do
   ni <- IS.newIStructure 2
   parent info >>= IS.put ni 0 >> IS.put ni 1 r >> return ni
 
-
 -- Using EdgeGraph representation for this algorithm. Defining it here for now.
 
 data EdgeGraph = EdgeGraph (U.Vector (NodeID, NodeID))
 
-type ParFor e s = (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
+type ParFor e s = (Int, Int) -> (Int -> Par e s ()) -> Par e s ()
 
 -- Minimum spanning forest via Kruskal's algorithm
 
 msf_kruskal :: ParFor e s -> EdgeGraph -> Par e s (IS.IStructure s Bool)
 msf_kruskal parFor (EdgeGraph edges) = do
   msf <- IS.newIStructure (U.length edges)
-  let maxV = U.foldl (\a (u,v) -> max a $ max u v) 0 edges
-      vids = [0..maxV]
+  let maxV = U.foldl (\a (u, v) -> max a $ max u v) 0 edges
+      vids = [0 .. maxV]
   infos <- mapM make_set vids
   ds <- SLM.newFromList $ zip vids infos
-  parFor (0,U.length edges) $ \ ed -> do
-    let (u,v) = edges U.! (fromIntegral ed)
-    [uset, vset] <- mapM (find_set ds) [u,v]
+  parFor (0, U.length edges) $ \ed -> do
+    let (u, v) = edges U.! (fromIntegral ed)
+    [uset, vset] <- mapM (find_set ds) [u, v]
     when (uset /= vset) $ IS.put_ msf (fromIntegral ed) True >> union ds u v
   return msf

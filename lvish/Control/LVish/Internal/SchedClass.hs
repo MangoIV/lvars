@@ -1,44 +1,46 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE KindSignatures    #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Control.LVish.Internal.SchedClass where
 
-import           Control.LVish.SchedIdempotent
-import           Control.Monad
+import Control.LVish.SchedIdempotent
 -- import Control.LVish.SchedIdempotentInternal
 import qualified Control.LVish.SchedIdempotentInternal as Sched
-import           Data.Atomics
-import           Data.IORef
-
-import qualified Data.Concurrent.Bag                   as B
+import Control.Monad
+import Data.Atomics
+import qualified Data.Concurrent.Bag as B
+import Data.IORef
 
 --------------------------------------------------------------------------------
 
 data Idempotency = Idemp | NonIdemp
-  deriving Show
+  deriving (Show)
 
 newtype Par2 (idp :: Idempotency) a = Par2 (Par a)
 
 -- | This exists solely to choose between idempotent and non-idempotent
 -- configurations of the `Par` monad.
 class WorkSched par where
-  getLV :: (LVar a d)                  -- ^ the LVar
-        -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
-        -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
-        -> par b
+  getLV
+    :: (LVar a d)
+    -- ^ the LVar
+    -> (a -> Bool -> IO (Maybe b))
+    -- ^ already past threshold?
+    -> (d -> IO (Maybe b))
+    -- ^ does @d@ pass the threshold?
+    -> par b
 
- -- TODO: figure out what to do with addHandler:
- {-
-  addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
-             -> LVar a d                    -- ^ LVar to listen to
-             -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
-             -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
-             -> par ()
- -}
+-- TODO: figure out what to do with addHandler:
+{-
+ addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
+            -> LVar a d                    -- ^ LVar to listen to
+            -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
+            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
+            -> par ()
+-}
 
 instance WorkSched (Par2 Idemp) where
   getLV = mkGetLV Idemp
@@ -49,12 +51,14 @@ instance WorkSched (Par2 NonIdemp) where
 -- ARGH: everything overloaded on these two should have a SPECIALIZE pragma for both.
 
 {-# INLINE mkGetLV #-}
-mkGetLV :: Idempotency -> LVar a1 d
-                       -> (a1 -> Bool -> IO (Maybe a))
-                       -> (d -> IO (Maybe a))
-                       -> Par2 idp a
-mkGetLV mode lv@(LVar {state, status}) globalThresh deltaThresh = Par2$
-   mkPar $ \k q -> do
+mkGetLV
+  :: Idempotency
+  -> LVar a1 d
+  -> (a1 -> Bool -> IO (Maybe a))
+  -> (d -> IO (Maybe a))
+  -> Par2 idp a
+mkGetLV mode lv@(LVar {state, status}) globalThresh deltaThresh = Par2 $
+  mkPar $ \k q -> do
     -- tradeoff: we fastpath the case where the LVar is already beyond the
     -- threshhold by polling *before* enrolling the callback.  The price is
     -- that, if we are not currently above the threshhold, we will have to poll
@@ -66,16 +70,16 @@ mkGetLV mode lv@(LVar {state, status}) globalThresh deltaThresh = Par2$
       Frozen -> do
         tripped <- globalThresh state True
         case tripped of
-          Just b  -> exec (k b) q -- already past the threshold; invoke the
-                                 -- continuation immediately
+          Just b -> exec (k b) q -- already past the threshold; invoke the
+          -- continuation immediately
           Nothing -> sched q
       Active listeners -> do
         tripped <- globalThresh state False
         case tripped of
           Just b -> exec (k b) q -- already past the threshold; invoke the
-                                 -- continuation immediately
-
-          Nothing -> do          -- /transiently/ not past the threshhold; block
+          -- continuation immediately
+          Nothing -> do
+            -- /transiently/ not past the threshhold; block
             let unblockWhen1 thresh tok q = do
                   tripped <- thresh
                   whenJust tripped $ \b -> do
@@ -92,15 +96,14 @@ mkGetLV mode lv@(LVar {state, status}) globalThresh deltaThresh = Par2$
                       when winner $ Sched.pushWork q (k b)
 
             mflg <- case mode of
-                     Idemp    -> return (error "getLV: This value should be unused")
-                     NonIdemp -> newIORef False
+              Idemp -> return (error "getLV: This value should be unused")
+              NonIdemp -> newIORef False
 
             let unblock = case mode of
-                           Idemp    -> unblockWhen1
-                           NonIdemp -> unblockWhen2 mflg
+                  Idemp -> unblockWhen1
+                  NonIdemp -> unblockWhen2 mflg
                 onUpdate d = unblock $ deltaThresh d
-                onFreeze   = unblock $ globalThresh state True
-
+                onFreeze = unblock $ globalThresh state True
 
             -- add listener, i.e., move the continuation to the waiting bag
             tok <- B.put listeners $ Listener onUpdate onFreeze
@@ -112,12 +115,10 @@ mkGetLV mode lv@(LVar {state, status}) globalThresh deltaThresh = Par2$
             tripped' <- globalThresh state frozen
             case tripped' of
               Just b -> do
-                B.remove tok  -- remove the listener we just added, and
-                exec (k b) q  -- execute the continuation. this work might be
-                              -- redundant, but by idempotence that's OK
+                B.remove tok -- remove the listener we just added, and
+                exec (k b) q -- execute the continuation. this work might be
+                -- redundant, but by idempotence that's OK
               Nothing -> sched q
-
-
 
 -- getLV :: (LVar a d)                  -- ^ the LVar
 --       -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
@@ -187,11 +188,11 @@ isFrozen (LVar {status}) = do
   curStatus <- readIORef status
   case curStatus of
     Active _ -> return False
-    Frozen   -> return True
+    Frozen -> return True
 
 -- mkPar :: ((a -> ClosedPar) -> SchedState -> IO ()) -> Par a
 -- mkPar f = Par $ \k -> ClosedPar $ \q -> f k q
 
 whenJust :: Maybe a -> (a -> IO ()) -> IO ()
-whenJust Nothing  _ = return ()
+whenJust Nothing _ = return ()
 whenJust (Just a) f = f a

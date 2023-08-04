@@ -1,18 +1,18 @@
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE Rank2Types                 #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
 --  This file provides a basic capability for parallel in-place modification of
@@ -23,60 +23,66 @@
 -- This module does NOT provide a monad-transformer.  Rather, it is a ROOT for a
 -- monad-transformer stack, and is hard-wired to use the "Control.LVish" version of
 -- the `Par` monad underneath.
-
 module Control.Par.ST
-       (
-         -- * The monad: a dischargable effect
-         ParST, runParST, runParSTCopy, unsafeRunParST,
-         reify, unsafeInstall,
+  ( -- * The monad: a dischargable effect
+    ParST
+  , runParST
+  , runParSTCopy
+  , unsafeRunParST
+  , reify
+  , unsafeInstall
 
-         -- * An alternate fork operation
-         forkSTSplit,
+    -- * An alternate fork operation
+  , forkSTSplit
 
-         -- * Working with ST and other lifts
-         liftST, liftPar,
+    -- * Working with ST and other lifts
+  , liftST
+  , liftPar
 
-         -- * Convert between state types
-         transmute,
+    -- * Convert between state types
+  , transmute
 
-         -- * Type class for valid states of ParST.
-         STSplittable(..),
+    -- * Type class for valid states of ParST.
+  , STSplittable (..)
 
-         -- * Annoying newtypes and wrappers to take the @s@ param last:
-         MVectorFlp(..), UVectorFlp(..), SVectorFlp(..),
-         STTup2(..), STUnit(..),
+    -- * Annoying newtypes and wrappers to take the @s@ param last:
+  , MVectorFlp (..)
+  , UVectorFlp (..)
+  , SVectorFlp (..)
+  , STTup2 (..)
+  , STUnit (..)
 
-         -- * Build recipes for state objects
-         BuildRecipe(..), ArrayRecipe (..),
+    -- * Build recipes for state objects
+  , BuildRecipe (..)
+  , ArrayRecipe (..)
 
-         -- * TEMPORARY: Useful utilities
-         for_, mkParMapM
---         vecParMap_,
-       )
-       where
+    -- * TEMPORARY: Useful utilities
+  , for_
+  , mkParMapM
+  --         vecParMap_,
+  )
+where
 
 #if __GLASGOW_HASKELL__ < 710
 import           Control.Applicative
 #endif
 
-import qualified Control.Monad.Reader         as R
-import           Control.Monad.ST             (ST)
-import           Control.Monad.ST.Unsafe      (unsafeSTToIO)
-import qualified Control.Monad.State.Strict   as S
-
-import qualified Data.Vector.Mutable          as MV
+import qualified Control.Monad.Reader as R
+import Control.Monad.ST (ST)
+import Control.Monad.ST.Unsafe (unsafeSTToIO)
+import qualified Control.Monad.State.Strict as S
+import qualified Control.Par.Class as PC
+import Control.Par.Class.Unsafe (ParMonad (..), ParThreadSafe)
+import Control.Par.EffectSigs
+import qualified Data.Vector.Mutable as MV
 import qualified Data.Vector.Storable.Mutable as MS
-import qualified Data.Vector.Unboxed.Mutable  as MU
-import           Prelude                      hiding (length, read)
-
-import qualified Control.Par.Class            as PC
-import           Control.Par.Class.Unsafe     (ParMonad (..), ParThreadSafe)
-import           Control.Par.EffectSigs
-
-import           GHC.Conc                     (getNumProcessors)
-import           System.IO.Unsafe             (unsafeDupablePerformIO)
+import qualified Data.Vector.Unboxed.Mutable as MU
+import GHC.Conc (getNumProcessors)
+import System.IO.Unsafe (unsafeDupablePerformIO)
+import Prelude hiding (length, read)
 
 --------------------------------------------------------------------------------
+
 -- | The class of types that can be modified in ST computations, and whose state can
 -- be partitioned into disjoint pieces to be passed linearly to exactly one parallel
 -- subcomputation.
@@ -85,6 +91,7 @@ import           System.IO.Unsafe             (unsafeDupablePerformIO)
 class STSplittable (ty :: * -> *) where
   -- | Something of type `SplitIdx` describes where and how to split the data into two pieces.
   type SplitIdx ty :: *
+
   -- | `splitST` does the actual splitting.  It is guaranteed to
   -- return non-overlapping (non-aliased) pieces of the structure.
   splitST :: SplitIdx ty -> ty s -> (ty s, ty s)
@@ -102,7 +109,6 @@ class STSplittable (ty :: * -> *) where
   -- the original value had aliases, the resulting value does not.
   cloneState :: ty s -> ST s (ty s)
 
-
 {-
 -- | A valid state for a ParST computation provides various recipes
 -- and combinators for creation, splitting, and "zooming" on sub-parts.
@@ -115,13 +121,11 @@ class STSplittable ty => ParSTState ty where
 -- | A method of initializing a fresh array.
 data ArrayRecipe s a = ArrayRecipe Int (Int -> ST s a)
 
-
 -- | Descriptions of guaranteed alias-free ways to build an array.
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.
---
-newtype MVectorFlp a s = VFlp { unFlp :: MV.MVector s a }
+newtype MVectorFlp a s = VFlp {unFlp :: MV.MVector s a}
 
 -- | A single vector cannot contain aliases.
 --
@@ -134,95 +138,106 @@ instance STSplittable (MVectorFlp a) where
   splitST mid (VFlp vec) =
     let lvec = MV.slice 0 mid vec
         rvec = MV.slice mid (MV.length vec - mid) vec
-    in (VFlp lvec, VFlp rvec)
+     in (VFlp lvec, VFlp rvec)
 
-  -- | Because any vector is internally alias-free, we accept an arbitrary vector here.
+  -- \| Because any vector is internally alias-free, we accept an arbitrary vector here.
 
   -- type BuildRecipe (MVectorFlp a) = ST () (MVectorFlp a ())
---   newtype BuildRecipe (MVectorFlp a) = forall s . MVectorFlpRecipe (MVectorFlp a s)
---  data BuildRecipe (MVectorFlp a) = forall s . MVectorFlpRecipe (MVectorFlp a s)
+  --   newtype BuildRecipe (MVectorFlp a) = forall s . MVectorFlpRecipe (MVectorFlp a s)
+  --  data BuildRecipe (MVectorFlp a) = forall s . MVectorFlpRecipe (MVectorFlp a s)
 
-  data BuildRecipe (MVectorFlp a) = MVectorFlpRecipe (forall s . ArrayRecipe s a)
+  data BuildRecipe (MVectorFlp a) = MVectorFlpRecipe (forall s. ArrayRecipe s a)
 
   instantiateRecipe (MVectorFlpRecipe (ArrayRecipe len fn)) =
-    do v <- MV.new len
-       for_ (0,len) $ \ix -> do el <- (fn ix)
-                                MV.write v ix el
-       return (VFlp v)
+    do
+      v <- MV.new len
+      for_ (0, len) $ \ix -> do
+        el <- (fn ix)
+        MV.write v ix el
+      return (VFlp v)
 
   cloneState (VFlp v) =
-     do v' <- MV.clone v
-        return $ VFlp v'
+    do
+      v' <- MV.clone v
+      return $ VFlp v'
 
 ------------------------------------------------------------
 
 -- | An annoying type wrapper simply for the purpose of arranging for the 's' parameter
 -- to be last.
-data STTup2 (a :: * -> *) (b :: * -> *) (s :: *) =
-     STTup2 !(a s) !(b s)
+data STTup2 (a :: * -> *) (b :: * -> *) (s :: *)
+  = STTup2 !(a s) !(b s)
+
 -- I haven't figured out how to get this to work with raw, naked tuples yet.  So for
 -- now, `STTup2`.
 
 instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
   type SplitIdx (STTup2 a b) = (SplitIdx a, SplitIdx b)
   {-# INLINE splitST #-}
-  splitST (spltA,spltB) (STTup2 a b) =
-    let (a',a'') = splitST spltA a
-        (b',b'') = splitST spltB b
-    in ((STTup2 a' b'), (STTup2 a'' b''))
+  splitST (spltA, spltB) (STTup2 a b) =
+    let (a', a'') = splitST spltA a
+        (b', b'') = splitST spltB b
+     in ((STTup2 a' b'), (STTup2 a'' b''))
 
   data BuildRecipe (STTup2 a b) = STTup2Recipe (BuildRecipe a) (BuildRecipe b)
 
   instantiateRecipe (STTup2Recipe ra rb) =
-    do a <- instantiateRecipe ra
-       b <- instantiateRecipe rb
-       return $ STTup2 a b
+    do
+      a <- instantiateRecipe ra
+      b <- instantiateRecipe rb
+      return $ STTup2 a b
 
   cloneState (STTup2 a b) =
-    do a' <- cloneState a
-       b' <- cloneState b
-       return $ STTup2 a' b'
-
+    do
+      a' <- cloneState a
+      b' <- cloneState b
+      return $ STTup2 a' b'
 
 -- | Safe lifting of a computation on state `A` to one on state `(A,B)`, where
 --   the second component is ignored.
-_liftL :: ParMonad p =>
-          (ParST (st1 s0) p) e s1 a -> (ParST ((STTup2 st1 st2) s0) p) e s1 a
+_liftL
+  :: (ParMonad p)
+  => (ParST (st1 s0) p) e s1 a
+  -> (ParST ((STTup2 st1 st2) s0) p) e s1 a
 _liftL (ParST f1) = ParST $ \(STTup2 st1 r) ->
-  do (x,l') <- (f1 st1)
-     return (x, STTup2 l' r)
+  do
+    (x, l') <- (f1 st1)
+    return (x, STTup2 l' r)
 
 -- | Like `liftL`, but flipped.
-_liftR :: ParMonad p =>
-          (ParST (st1 s0) p) e s1 a -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
+_liftR
+  :: (ParMonad p)
+  => (ParST (st1 s0) p) e s1 a
+  -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
 _liftR (ParST f1) = ParST $ \(STTup2 l st1) ->
-  do (x,new) <- (f1 st1)
-     return (x, STTup2 l new)
+  do
+    (x, new) <- (f1 st1)
+    return (x, STTup2 l new)
 
 -- | Swap the components of a STTup2 computation.
-_swap :: ParMonad p =>
-       (ParST ((STTup2 st1 st2) s0) p) e s1 a
-   -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
+_swap
+  :: (ParMonad p)
+  => (ParST ((STTup2 st1 st2) s0) p) e s1 a
+  -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
 _swap (ParST f1) = ParST $ \(STTup2 y x) ->
-  do (ans, STTup2 x' y') <- f1 (STTup2 x y)
-     return (ans, STTup2 y' x')
-
+  do
+    (ans, STTup2 x' y') <- f1 (STTup2 x y)
+    return (ans, STTup2 y' x')
 
 -- | A splittable type which contains no information.
 data STUnit s = STUnit
--- newtype STUnit s = STUnit ()
 
+-- newtype STUnit s = STUnit ()
 
 instance STSplittable STUnit where
   type SplitIdx STUnit = ()
   {-# INLINE splitST #-}
-  splitST () STUnit = (STUnit,STUnit)
+  splitST () STUnit = (STUnit, STUnit)
 
   data BuildRecipe STUnit = STUnitRecipe
 
   instantiateRecipe STUnitRecipe = return STUnit
   cloneState STUnit = return STUnit
-
 
 ------------------------------------------------------------
 
@@ -236,18 +251,21 @@ instance STSplittable (UVectorFlp a) where
   splitST mid (UFlp vec) =
     let lvec = MU.slice 0 mid vec
         rvec = MU.slice mid (MU.length vec - mid) vec
-    in (UFlp lvec, UFlp rvec)
+     in (UFlp lvec, UFlp rvec)
 
-  data BuildRecipe (UVectorFlp a) = MU.Unbox a => UVectorFlpRecipe (forall s . ArrayRecipe s a)
+  data BuildRecipe (UVectorFlp a) = (MU.Unbox a) => UVectorFlpRecipe (forall s. ArrayRecipe s a)
 
   instantiateRecipe (UVectorFlpRecipe (ArrayRecipe len fn)) =
-    do v <- MU.new len
-       for_ (0,len) $ \ix -> do el <- (fn ix)
-                                MU.write v ix el
-       return (UFlp v)
+    do
+      v <- MU.new len
+      for_ (0, len) $ \ix -> do
+        el <- (fn ix)
+        MU.write v ix el
+      return (UFlp v)
   cloneState (UFlp v) =
-     do v' <- MU.clone v
-        return $ UFlp v'
+    do
+      v' <- MU.clone v
+      return $ UFlp v'
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.  Also carries the `Storable` constraint.
@@ -259,19 +277,21 @@ instance STSplittable (SVectorFlp a) where
   splitST mid (SFlp vec) =
     let lvec = MS.slice 0 mid vec
         rvec = MS.slice mid (MS.length vec - mid) vec
-    in (SFlp lvec, SFlp rvec)
+     in (SFlp lvec, SFlp rvec)
 
-  data BuildRecipe (SVectorFlp a) = MS.Storable a => SVectorFlpRecipe (forall s .  ArrayRecipe s a)
+  data BuildRecipe (SVectorFlp a) = (MS.Storable a) => SVectorFlpRecipe (forall s. ArrayRecipe s a)
 
   instantiateRecipe (SVectorFlpRecipe (ArrayRecipe len fn)) =
-    do v <- MS.new len
-       for_ (0,len) $ \ix -> do el <- (fn ix)
-                                MS.write v ix el
-       return (SFlp v)
+    do
+      v <- MS.new len
+      for_ (0, len) $ \ix -> do
+        el <- (fn ix)
+        MS.write v ix el
+      return (SFlp v)
   cloneState (SFlp v) =
-     do v' <- MS.clone v
-        return $ SFlp v'
-
+    do
+      v' <- MS.clone v
+      return $ SFlp v'
 
 --------------------------------------------------------------------------------
 
@@ -283,10 +303,7 @@ instance STSplittable (SVectorFlp a) where
 --
 -- Its final parameter, 'ans', is the result of running the entire computation, after
 -- which the vector is no longer accessible.
-newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
-        ParST { unwrapParST :: stState -> p e s (a,stState) }
-
-
+newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a = ParST {unwrapParST :: stState -> p e s (a, stState)}
 
 -- | @runParST@ discharges the extra state effect leaving the the underlying `Par`
 -- computation only -- just like `runStateT`.  Here, using the standard trick
@@ -297,47 +314,52 @@ newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
 -- To retain alias-freedom the user may not directly initialize the state, rather, they
 -- pass a recipe to describe how to build the initial state.
 {-# INLINE runParST #-}
-runParST :: forall (st :: * -> *) s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
-            (ParMonad p, ParThreadSafe p, STSplittable st) =>
-             (BuildRecipe st)
-             -> (forall s1 . ParST (st s1) p e s2 a)
-             -> p e s2 a
+runParST
+  :: forall (st :: * -> *) s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a
+   . (ParMonad p, ParThreadSafe p, STSplittable st)
+  => (BuildRecipe st)
+  -> (forall s1. ParST (st s1) p e s2 a)
+  -> p e s2 a
 runParST recipe (ParST fn) =
   doST (instantiateRecipe recipe) `pbind` \initVal ->
-   let -- xm :: p e s2 (a, st s0)
-       xm = fn initVal
-    in xm `pbind` (preturn . fst)
+    let -- xm :: p e s2 (a, st s0)
+        xm = fn initVal
+     in xm `pbind` (preturn . fst)
  where
   doST = internalLiftIO . unsafeSTToIO
 
 -- | This version does a deep copy of the initial state.
-runParSTCopy :: forall (st :: * -> *) s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
-                (ParMonad p, ParThreadSafe p, STSplittable st) =>
-                 (forall s0 . ST s0 (st s0))
-                 -> (forall s1 . ParST (st s1) p e s2 a)
-                 -> p e s2 a
+runParSTCopy
+  :: forall (st :: * -> *) s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a
+   . (ParMonad p, ParThreadSafe p, STSplittable st)
+  => (forall s0. ST s0 (st s0))
+  -> (forall s1. ParST (st s1) p e s2 a)
+  -> p e s2 a
 runParSTCopy mkInit pst =
   unsafeRunParST (error "runParSTCopy: This value should be unused.") $
-    do initVal  <- liftST mkInit
-       initVal' <- liftST $ cloneState initVal
-       unsafeInstall initVal'
-       pst
+    do
+      initVal <- liftST mkInit
+      initVal' <- liftST $ cloneState initVal
+      unsafeInstall initVal'
+      pst
 
 -- TODO: We could have a version that looks like this
-_runParSTCopy' :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
-                 (ParMonad p, ParThreadSafe p, STSplittable st) =>
-                  (st s0)
-                  -> (ParST (st s0) p e s2 a)
-                  -> ST s0 (p e s2 a)
+_runParSTCopy'
+  :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a
+   . (ParMonad p, ParThreadSafe p, STSplittable st)
+  => (st s0)
+  -> (ParST (st s0) p e s2 a)
+  -> ST s0 (p e s2 a)
 _runParSTCopy' _initVal _pst = undefined
 
 -- | The unsafe variant allows the user to initialize with an arbitrary state.
 {-# INLINE unsafeRunParST #-}
-unsafeRunParST :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
-                  (ParMonad p, ParThreadSafe p) =>
-                   st s0
-                   -> (forall s1 . ParST (st s1) p e s2 a)
-                   -> p e s2 a
+unsafeRunParST
+  :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a
+   . (ParMonad p, ParThreadSafe p)
+  => st s0
+  -> (forall s1. ParST (st s1) p e s2 a)
+  -> p e s2 a
 unsafeRunParST initVal (ParST fn) =
   let xm :: p e s2 (a, st s0)
       xm = fn initVal
@@ -357,7 +379,7 @@ reify = ParST $ \s -> preturn (s, s)
 unsafeInstall :: (Monad (p e s), ParThreadSafe p) => stt -> ParST stt p e s ()
 unsafeInstall val = ParST $ \_ -> return ((), val)
 
-instance ParMonad p => ParMonad (ParST st p) where
+instance (ParMonad p) => ParMonad (ParST st p) where
   {-# INLINE preturn #-}
   preturn a = ParST $ \st -> return (a, st)
 
@@ -371,38 +393,39 @@ instance ParMonad p => ParMonad (ParST st p) where
 
   {-# INLINE fork #-}
   fork (ParST task) = liftPar $ PC.fork $ do
-      (res,_) <- task
-                 (error "fork: This child thread does not have permission to touch the array!")
-      return res
+    (res, _) <-
+      task
+        (error "fork: This child thread does not have permission to touch the array!")
+    return res
 
   type UnsafeParIO (ParST st p) = S.StateT st (UnsafeParIO p)
-  dropToUnsafe (ParST fn)  = S.StateT (dropToUnsafe . fn)
+  dropToUnsafe (ParST fn) = S.StateT (dropToUnsafe . fn)
   liftUnsafe (S.StateT fn) = ParST (liftUnsafe . fn)
-
 
 -- | Lift an ordinary `Par` computation into `ParST`.
 {-# INLINE liftPar #-}
-liftPar :: ParMonad p => p e s a -> (ParST st p) e s a
-liftPar m = ParST (\s -> m `pbind` (\x -> preturn (x,s)))
+liftPar :: (ParMonad p) => p e s a -> (ParST st p) e s a
+liftPar m = ParST (\s -> m `pbind` (\x -> preturn (x, s)))
 
-
-instance (ParMonad p, ParThreadSafe p) =>
-         R.MonadReader stts (ParST stts p e s) where
+instance
+  (ParMonad p, ParThreadSafe p)
+  => R.MonadReader stts (ParST stts p e s)
+  where
   {-# INLINE ask #-}
   ask = reify
 
   {-# INLINE local #-}
   local fn (ParST p) = ParST $ \st -> p (fn st)
 
-  -- local fn m =
+-- local fn m =
 
 -- | Allow `ST` computations inside `ParST` computations.
 --   This operation has some overhead.
 {-# INLINE liftST #-}
 liftST :: (ParMonad p, ParThreadSafe p) => ST ss a -> ParST (stt ss) p e s a
 liftST st = ParST $ \s -> do r <- internalLiftIO io; return (r, s)
-  where
-    io = unsafeSTToIO st
+ where
+  io = unsafeSTToIO st
 
 {-# INLINE overPartition #-}
 overPartition :: Int
@@ -415,25 +438,30 @@ numProcs = unsafeDupablePerformIO getNumProcessors
 -- | A simple for loop for numeric ranges (not requiring deforestation
 -- optimizations like `forM`).  Inclusive start, exclusive end.
 {-# INLINE for_ #-}
-for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ :: (Monad m) => (Int, Int) -> (Int -> m ()) -> m ()
 for_ (start, end) _fn | start > end = error "for_: start is greater than end"
 for_ (start, end) fn = loop start
  where
-   loop !i | i == end  = return ()
-           | otherwise = do fn i; loop (i+1)
+  loop !i
+    | i == end = return ()
+    | otherwise = do fn i; loop (i + 1)
 
 -- | Apply a user-provided transformation function.  Warning: this is
 -- unsafe because the user can destroy alias-freedom.
 {-# INLINE transmute #-}
 {-# DEPRECATED transmute "transmute allows violation of alias-freedom" #-}
-transmute :: forall t
-                    stState
-                    (p :: EffectSig -> * -> * -> *)
-                    (e :: EffectSig)
-                    s
-                    a.
-             ParMonad p =>
-             (stState -> t) -> ParST t p e s a -> ParST stState p e s a
+transmute
+  :: forall
+    t
+    stState
+    (p :: EffectSig -> * -> * -> *)
+    (e :: EffectSig)
+    s
+    a
+   . (ParMonad p)
+  => (stState -> t)
+  -> ParST t p e s a
+  -> ParST stState p e s a
 transmute fn (ParST comp) = ParST $ \orig -> do
   (res, _) <- comp (fn orig)
   return $! (res, orig)
@@ -449,13 +477,19 @@ transmute fn (ParST comp) = ParST $ \orig -> do
 -- state.
 {-# INLINE forkSTSplit #-}
 forkSTSplit
-  :: forall p t stt sFull e s.
-     (PC.ParIVar p, STSplittable stt,
-      HasPut e, HasGet e)
-     => SplitIdx stt                        -- ^ Where to split the data.
-     -> (forall sl. ParST (stt sl) p e s t) -- ^ Left child computation.
-     -> (forall sr. ParST (stt sr) p e s t) -- ^ Right child computation.
-     -> ParST (stt sFull) p e s (t, t)
+  :: forall p t stt sFull e s
+   . ( PC.ParIVar p
+     , STSplittable stt
+     , HasPut e
+     , HasGet e
+     )
+  => SplitIdx stt
+  -- ^ Where to split the data.
+  -> (forall sl. ParST (stt sl) p e s t)
+  -- ^ Left child computation.
+  -> (forall sr. ParST (stt sr) p e s t)
+  -- ^ Right child computation.
+  -> ParST (stt sFull) p e s (t, t)
 forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   let slice1, slice2 :: stt sFull
       (slice1, slice2) = splitST spltidx snap
@@ -467,69 +501,81 @@ forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
 -- | Spawn which does not assume idempotency of forked computations:
 mySpawn :: (HasPut e, PC.ParIVar p) => p e s a -> p e s (PC.IVar p s a)
 mySpawn f =
-  do l <- PC.new
-     PC.fork (do x <- f; PC.putNI_ l x)
-     return l
+  do
+    l <- PC.new
+    PC.fork (do x <- f; PC.putNI_ l x)
+    return l
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
-instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
-  -- | The `Future` type and `FutContents` constraint are the same as the
+instance (PC.ParFuture parM) => PC.ParFuture (ParST sttt parM) where
+  -- \| The `Future` type and `FutContents` constraint are the same as the
   -- underlying `Par` monad.
-  type Future      (ParST sttt parM)   = PC.Future      parM
+  type Future (ParST sttt parM) = PC.Future parM
   type FutContents (ParST sttt parM) a = PC.FutContents parM a
 
   {-# INLINE spawn_ #-}
-  spawn_ (ParST task) = ParST $ \st -> -- TODO: Why can't I use `return` here?
-     fmap (,st) $ PC.spawn_ $ do
-       (res, _) <- task $
-         error "spawn_: This child thread does not have permission to touch the array!"
-       return res
+  spawn_ (ParST task) = ParST $ \st ->
+    -- TODO: Why can't I use `return` here?
+    fmap (,st) $ PC.spawn_ $ do
+      (res, _) <-
+        task $
+          error "spawn_: This child thread does not have permission to touch the array!"
+      return res
 
   {-# INLINE get #-}
   get iv = ParST $ \st -> (,st) <$> PC.get iv
 
-instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
+instance (PC.ParIVar parM) => PC.ParIVar (ParST sttt parM) where
   {-# INLINE new #-}
-  new       = ParST $ \st -> (,st) <$> PC.new
+  new = ParST $ \st -> (,st) <$> PC.new
   {-# INLINE put_ #-}
   put_ iv v = ParST $ \st -> (,st) <$> PC.put_ iv v
   {-# INLINE putNI_ #-}
   putNI_ iv v = ParST $ \st -> (,st) <$> PC.putNI_ iv v
 
-
 --------------------------------------------------------------------------------
+
 -- | Generic way to build an in-place map operation for a collection state.
 --
 --   This function reserves the right to sequentialize some iterations.
-mkParMapM :: forall elt s1 stt p e s .
-             (STSplittable stt, ParThreadSafe p,
-              PC.ParFuture p, HasGet e, HasPut e,
-              PC.ParIVar p) =>
-              (forall s2 . Int ->        ParST (stt s2) p e s elt) -- ^ Reader
-           -> (forall s2 . Int -> elt -> ParST (stt s2) p e s ())  -- ^ Writer
-           -> (forall s2 .               ParST (stt s2) p e s Int) -- ^ Length
-           -> (Int -> SplitIdx stt)                                -- ^ Split elements
-           -> (elt -> p e s elt)                                   -- ^ Fn to map over elmts.
-           -> ParST (stt s1) p e s ()
+mkParMapM
+  :: forall elt s1 stt p e s
+   . ( STSplittable stt
+     , ParThreadSafe p
+     , PC.ParFuture p
+     , HasGet e
+     , HasPut e
+     , PC.ParIVar p
+     )
+  => (forall s2. Int -> ParST (stt s2) p e s elt)
+  -- ^ Reader
+  -> (forall s2. Int -> elt -> ParST (stt s2) p e s ())
+  -- ^ Writer
+  -> (forall s2. ParST (stt s2) p e s Int)
+  -- ^ Length
+  -> (Int -> SplitIdx stt)
+  -- ^ Split elements
+  -> (elt -> p e s elt)
+  -- ^ Fn to map over elmts.
+  -> ParST (stt s1) p e s ()
 {-# INLINE mkParMapM #-}
 mkParMapM reader writer getsize mksplit fn = do
   len <- getsize
 
   let share = max 1 (len `quot` (numProcs * overPartition))
 
-      loopmpm :: Int -> (forall ls . ParST (stt ls) p e s ())
+      loopmpm :: Int -> (forall ls. ParST (stt ls) p e s ())
       loopmpm iters
         | iters <= share =
-          -- Bottom out to a sequential loop:
-          for_ (0,iters) $ \ ind -> do
-            x <- reader ind
-            y <- liftPar $ fn x
-            writer ind y
-            return ()
-
+            -- Bottom out to a sequential loop:
+            for_ (0, iters) $ \ind -> do
+              x <- reader ind
+              y <- liftPar $ fn x
+              writer ind y
+              return ()
         | otherwise = do
-            let (iters2,extra) = iters `quotRem` 2
+            let (iters2, extra) = iters `quotRem` 2
                 iters1 = iters2 + extra
             R.void $ forkSTSplit (mksplit iters1) (loopmpm iters1) (loopmpm iters2)
 

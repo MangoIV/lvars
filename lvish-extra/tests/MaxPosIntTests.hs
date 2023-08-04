@@ -1,23 +1,21 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- | Tests for the Data.LVar.MaxPosInt module.
+module MaxPosIntTests (tests, runTests) where
 
-module MaxPosIntTests(tests, runTests) where
-
-import Test.Tasty.HUnit 
-import Test.Tasty (TestTree, defaultMain, testGroup)
 -- import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Tasty.TH (testGroupGenerator)
-import qualified Test.HUnit as HU
-import           TestHelpers as T
 
 import Control.Concurrent (killThread, myThreadId)
-
-import Data.LVar.MaxPosInt
-import           Control.LVish hiding (put)
-import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
+import Control.LVish hiding (put)
+import Control.LVish.DeepFrz (DeepFrz (..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
+import Data.LVar.MaxPosInt
+import qualified Test.HUnit as HU
+import Test.Tasty (TestTree, defaultMain, testGroup)
+import Test.Tasty.HUnit
+import Test.Tasty.TH (testGroupGenerator)
+import TestHelpers as T
 
 --------------------------------------------------------------------------------
 

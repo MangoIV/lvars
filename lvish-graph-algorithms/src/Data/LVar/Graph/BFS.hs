@@ -1,8 +1,7 @@
--- | Breadth-first search algorithms in lvish
-
-{-# LANGUAGE CPP   #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs #-}
 
+-- | Breadth-first search algorithms in lvish
 module Data.LVar.Graph.BFS where
 
 -- import Utils
@@ -12,13 +11,12 @@ module Data.LVar.Graph.BFS where
 -- import PBBS.Timing (wait_clocks, runAndReport)
 -- calibrate, measureFreq, commaint,
 
-import           Control.LVish
-
+import Control.LVish
 -- import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
-import qualified Data.Vector.Unboxed  as U
-import           Data.Word
 
-import           Data.Graph.Adjacency
+import Data.Graph.Adjacency
+import qualified Data.Vector.Unboxed as U
+import Data.Word
 
 -- define DEBUG_CHECKS
 
@@ -31,8 +29,8 @@ import           Data.LVar.PureSet    as S
 import           Data.LVar.SLSet      as S
 #endif
 
-import           Data.LVar.IStructure as ISt
-import           Data.LVar.NatArray   as NArr
+import Data.LVar.IStructure as ISt
+import Data.LVar.NatArray as NArr
 
 --------------------------------------------------------------------------------
 
@@ -121,7 +119,6 @@ parMapM_ f l =
      return ()
 -}
 
-
 --------------------------------------------------------------------------------
 -- Graph algorithms
 --------------------------------------------------------------------------------
@@ -129,24 +126,24 @@ parMapM_ f l =
 bfs_async :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (ISet s NodeID)
 bfs_async gr@(AdjacencyGraph vvec evec) start = do
   st <- S.newFromList [start]
-  S.forEach st $ \ nd -> do
-    logDbgLn 1 $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
+  S.forEach st $ \nd -> do
+    logDbgLn 1 $ " [bfs] expanding node " ++ show nd ++ " to nbrs " ++ show (nbrs gr nd)
     forVec (nbrs gr nd) (`S.insert` st)
   return st
---    T.traverse_ (`S.insert` st) (nbrs gr nd)
 
+--    T.traverse_ (`S.insert` st) (nbrs gr nd)
 
 -- | A version that uses an array rather than set representation.
 bfs_async_arr :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (IStructure s Bool)
 bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
   arr <- newIStructure (U.length vvec)
   let callback nd bool = do
-       let myNbrs = nbrs gr (fromIntegral nd)
-       logDbgLn 1 $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
-       -- TODO: possibly use a better for loop:
-       forVec myNbrs (\nbr -> ISt.put_ arr (fromIntegral nbr) True)
+        let myNbrs = nbrs gr (fromIntegral nd)
+        logDbgLn 1 $ " [bfs] expanding node " ++ show (nd, bool) ++ " to nbrs " ++ show myNbrs
+        -- TODO: possibly use a better for loop:
+        forVec myNbrs (\nbr -> ISt.put_ arr (fromIntegral nbr) True)
   ISt.forEachHP Nothing arr callback
-  logDbgLn 1 $" [bfs] Seeding with start vertex... "
+  logDbgLn 1 $ " [bfs] Seeding with start vertex... "
   ISt.put_ arr (fromIntegral start) True
   return arr
 
@@ -155,9 +152,9 @@ bfs_async_arr2 :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (NatArray s 
 bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
   arr <- newNatArray (U.length vvec)
   let callback nd flg = do
-       let myNbrs = nbrs gr (fromIntegral nd)
-       -- logDbgLn 1 $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
-       forVec myNbrs (\nbr -> NArr.put arr (fromIntegral nbr) 1)
+        let myNbrs = nbrs gr (fromIntegral nd)
+        -- logDbgLn 1 $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
+        forVec myNbrs (\nbr -> NArr.put arr (fromIntegral nbr) 1)
   NArr.forEach arr callback
   -- logDbgLn 1 $" [bfs] Seeding with start vertex... "
   NArr.put arr (fromIntegral start) 1
@@ -168,11 +165,14 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
 --------------------------------------------------------------------------------
 
 {-# INLINE forVec #-}
+
 -- | Simple for-each loops over vector elements.
-forVec :: U.Unbox a => U.Vector a -> (a -> Par e s ()) -> Par e s ()
+forVec :: (U.Unbox a) => U.Vector a -> (a -> Par e s ()) -> Par e s ()
 forVec vec fn = loop 0
-  where
-    len = U.length vec
-    loop i | i == len = return ()
-           | otherwise = fn (U.unsafeIndex vec i) >>
-                         loop (i+1)
+ where
+  len = U.length vec
+  loop i
+    | i == len = return ()
+    | otherwise =
+        fn (U.unsafeIndex vec i)
+          >> loop (i + 1)

@@ -1,22 +1,24 @@
-{-# LANGUAGE CPP               #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE EmptyDataDecls    #-}
-{-# LANGUAGE MagicHash         #-}
-{-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE Unsafe            #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE Unsafe #-}
 
 -- | This module is /not/ Safe Haskell, but it must be used to create
 -- new LVar types.
 module Control.LVish.DeepFrz.Internal
-       (
-         DeepFrz(..), NonFrzn, Frzn, Trvrsbl
-       )
-       where
+  ( DeepFrz (..)
+  , NonFrzn
+  , Frzn
+  , Trvrsbl
+  )
+where
 
-import           Data.Int
-import           Data.Kind (Type)
-import           Data.Word
-import           GHC.Exts  (unsafeCoerce#)
+import Data.Int
+import Data.Kind (Type)
+import Data.Word
+import GHC.Exts (unsafeCoerce#)
 
 -- | DeepFreezing is a type-level (guaranteed /O(1)/ time complexity)
 -- operation.  It marks an LVar and its contents (recursively) as
@@ -56,30 +58,30 @@ data Trvrsbl
 
 #define MKFRZINST(T) instance DeepFrz T where type FrzType T = T
 
-MKFRZINST(Int)
-MKFRZINST(Int8)
-MKFRZINST(Int16)
-MKFRZINST(Int32)
-MKFRZINST(Int64)
-MKFRZINST(Word)
-MKFRZINST(Word8)
-MKFRZINST(Word16)
-MKFRZINST(Word32)
-MKFRZINST(Word64)
-MKFRZINST(Bool)
-MKFRZINST(Char)
-MKFRZINST(Integer)
-MKFRZINST(Float)
-MKFRZINST(Double)
+MKFRZINST (Int)
+MKFRZINST (Int8)
+MKFRZINST (Int16)
+MKFRZINST (Int32)
+MKFRZINST (Int64)
+MKFRZINST (Word)
+MKFRZINST (Word8)
+MKFRZINST (Word16)
+MKFRZINST (Word32)
+MKFRZINST (Word64)
+MKFRZINST (Bool)
+MKFRZINST (Char)
+MKFRZINST (Integer)
+MKFRZINST (Float)
+MKFRZINST (Double)
 
-MKFRZINST(())
-MKFRZINST(Ordering)
+MKFRZINST (())
+MKFRZINST (Ordering)
 
-instance DeepFrz a => DeepFrz [a] where
+instance (DeepFrz a) => DeepFrz [a] where
   type FrzType [a] = [FrzType a]
   frz = unsafeCoerce#
 
-instance DeepFrz a => DeepFrz (Maybe a) where
+instance (DeepFrz a) => DeepFrz (Maybe a) where
   type FrzType (Maybe a) = Maybe (FrzType a)
   frz = unsafeCoerce#
 
@@ -87,44 +89,114 @@ instance (DeepFrz a, DeepFrz b) => DeepFrz (Either a b) where
   type FrzType (Either a b) = Either (FrzType a) (FrzType b)
   frz = unsafeCoerce#
 
-instance (DeepFrz a, DeepFrz b) => DeepFrz (a,b) where
-  type FrzType (a,b) = (FrzType a,FrzType b)
+instance (DeepFrz a, DeepFrz b) => DeepFrz (a, b) where
+  type FrzType (a, b) = (FrzType a, FrzType b)
   frz = unsafeCoerce#
 
-instance (DeepFrz a, DeepFrz b, DeepFrz c) => DeepFrz (a,b,c) where
-  type FrzType (a,b,c) = (FrzType a,FrzType b,FrzType c)
+instance (DeepFrz a, DeepFrz b, DeepFrz c) => DeepFrz (a, b, c) where
+  type FrzType (a, b, c) = (FrzType a, FrzType b, FrzType c)
   frz = unsafeCoerce#
 
-instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d) => DeepFrz (a,b,c,d) where
-  type FrzType (a,b,c,d) = (FrzType a, FrzType b, FrzType c, FrzType d)
+instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d) => DeepFrz (a, b, c, d) where
+  type FrzType (a, b, c, d) = (FrzType a, FrzType b, FrzType c, FrzType d)
   frz = unsafeCoerce#
 
-instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d, DeepFrz e) => DeepFrz (a,b,c,d,e) where
-  type FrzType (a,b,c,d,e) = (FrzType a, FrzType b, FrzType c, FrzType d, FrzType e)
+instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d, DeepFrz e) => DeepFrz (a, b, c, d, e) where
+  type FrzType (a, b, c, d, e) = (FrzType a, FrzType b, FrzType c, FrzType d, FrzType e)
   frz = unsafeCoerce#
 
-instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d, DeepFrz e,
-          DeepFrz f) => DeepFrz (a,b,c,d,e,f) where
-  type FrzType (a,b,c,d,e,f) = (FrzType a, FrzType b, FrzType c, FrzType d, FrzType e,
-                                FrzType f)
+instance
+  ( DeepFrz a
+  , DeepFrz b
+  , DeepFrz c
+  , DeepFrz d
+  , DeepFrz e
+  , DeepFrz f
+  )
+  => DeepFrz (a, b, c, d, e, f)
+  where
+  type
+    FrzType (a, b, c, d, e, f) =
+      ( FrzType a
+      , FrzType b
+      , FrzType c
+      , FrzType d
+      , FrzType e
+      , FrzType f
+      )
   frz = unsafeCoerce#
 
-instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d, DeepFrz e,
-          DeepFrz f, DeepFrz g) => DeepFrz (a,b,c,d,e,f,g) where
-  type FrzType (a,b,c,d,e,f,g) = (FrzType a, FrzType b, FrzType c, FrzType d, FrzType e,
-                                  FrzType f, FrzType g)
+instance
+  ( DeepFrz a
+  , DeepFrz b
+  , DeepFrz c
+  , DeepFrz d
+  , DeepFrz e
+  , DeepFrz f
+  , DeepFrz g
+  )
+  => DeepFrz (a, b, c, d, e, f, g)
+  where
+  type
+    FrzType (a, b, c, d, e, f, g) =
+      ( FrzType a
+      , FrzType b
+      , FrzType c
+      , FrzType d
+      , FrzType e
+      , FrzType f
+      , FrzType g
+      )
   frz = unsafeCoerce#
 
-
-instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d, DeepFrz e,
-          DeepFrz f, DeepFrz g, DeepFrz h) => DeepFrz (a,b,c,d,e,f,g,h) where
-  type FrzType (a,b,c,d,e,f,g,h) = (FrzType a, FrzType b, FrzType c, FrzType d, FrzType e,
-                                    FrzType f, FrzType g, FrzType h)
+instance
+  ( DeepFrz a
+  , DeepFrz b
+  , DeepFrz c
+  , DeepFrz d
+  , DeepFrz e
+  , DeepFrz f
+  , DeepFrz g
+  , DeepFrz h
+  )
+  => DeepFrz (a, b, c, d, e, f, g, h)
+  where
+  type
+    FrzType (a, b, c, d, e, f, g, h) =
+      ( FrzType a
+      , FrzType b
+      , FrzType c
+      , FrzType d
+      , FrzType e
+      , FrzType f
+      , FrzType g
+      , FrzType h
+      )
   frz = unsafeCoerce#
 
-
-instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d, DeepFrz e,
-          DeepFrz f, DeepFrz g, DeepFrz h, DeepFrz i) => DeepFrz (a,b,c,d,e,f,g,h,i) where
-  type FrzType (a,b,c,d,e,f,g,h,i) = (FrzType a, FrzType b, FrzType c, FrzType d, FrzType e,
-                                      FrzType f, FrzType g, FrzType h, FrzType i)
+instance
+  ( DeepFrz a
+  , DeepFrz b
+  , DeepFrz c
+  , DeepFrz d
+  , DeepFrz e
+  , DeepFrz f
+  , DeepFrz g
+  , DeepFrz h
+  , DeepFrz i
+  )
+  => DeepFrz (a, b, c, d, e, f, g, h, i)
+  where
+  type
+    FrzType (a, b, c, d, e, f, g, h, i) =
+      ( FrzType a
+      , FrzType b
+      , FrzType c
+      , FrzType d
+      , FrzType e
+      , FrzType f
+      , FrzType g
+      , FrzType h
+      , FrzType i
+      )
   frz = unsafeCoerce#

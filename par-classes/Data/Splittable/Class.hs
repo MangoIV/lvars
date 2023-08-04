@@ -1,25 +1,21 @@
-{-# LANGUAGE CPP                    #-}
-{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-|
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
 
-  A simple type class for data that can be split into pieces for parallel operation,
-  and then reassembled.
-
--}
-
-module Data.Splittable.Class
-       (Split(..))
-       where
+-- |
+--
+--   A simple type class for data that can be split into pieces for parallel operation,
+--   and then reassembled.
+module Data.Splittable.Class (Split (..)) where
 
 import qualified Data.List as L
 
 -- | Data that can be split into balanced pieces.  The main application of this is
 -- parallel consumption of the data.
 class Split a where
--- class Eq a => Split a where
+  -- class Eq a => Split a where
 
   -- | Split the data value into pieces.  An empty data structure may return an empty
   -- list.
@@ -32,8 +28,8 @@ class Split a where
   -- The defaul implementation ignorse the hint:
   splitPlease _ = split
 
-  -- -- | The inverse of split.
-  -- combine :: [a] -> a
+-- -- | The inverse of split.
+-- combine :: [a] -> a
 
 --  empty   :: a
 
@@ -47,8 +43,8 @@ class Split a where
 -- splittable structures.  Nevertheless, lists are ubiquitous, so it's
 -- better to have this than not.
 instance Split [a] where
-  {-# INLINABLE split #-}
+  {-# INLINEABLE split #-}
   split ls =
     let len = length ls
-        (l,r) = L.splitAt (len `quot` 2) ls
-    in [l,r]
+        (l, r) = L.splitAt (len `quot` 2) ls
+     in [l, r]
