@@ -27,7 +27,7 @@ import Control.LVish.Internal (state)
 import Data.IORef
 import Data.LVar.Generic
 import Data.LVar.Internal.Pure as P
-import GHC.Prim (unsafeCoerce#)
+import GHC.Exts (unsafeCoerce#)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 --------------------------------------------------------------------------------

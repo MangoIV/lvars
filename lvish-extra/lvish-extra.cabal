@@ -83,7 +83,6 @@ library
   build-depends:
       atomic-primops        >=0.8.0
     , base                  >=4.8
-    , bits-atomic
     , containers            >=0.5
     , deepseq               >=1.4
     , ghc-prim              >=0.4
@@ -136,7 +135,7 @@ test-suite test-lvish-extra
     , lvish-extra
 
   build-depends:
-      base        >=4.6  && <4.9
+      base        >=4.6
     , containers  >=0.5
     , random
     , vector      >=0.10

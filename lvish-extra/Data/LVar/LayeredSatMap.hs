@@ -42,7 +42,7 @@ import qualified Data.LVar.IVar as IV
 import qualified Data.Map as M
 import Data.Maybe (isJust)
 import Data.UtilInternal (traverseWithKey_)
-import GHC.Prim (unsafeCoerce#)
+import GHC.Exts (unsafeCoerce#)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 data LayeredSatMap k s v where
